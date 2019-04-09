@@ -277,6 +277,59 @@ describe('HTTP', function() {
     });
   });
 
+  it('should mine blocks', async () => {
+    const info = await wclient.getAccount('primary', 'default');
+    addr = info.receiveAddress;
+    await nclient.execute('generatetoaddress', [4, addr]);
+  });
+
+  let name;
+  it('should get name by hash', async () => {
+    // some name state is required
+    // find a name that can be used
+    let start;
+    do {
+      name = await nclient.execute('grindname', [3]);
+      const result = await nclient.get(`/name/${name}`);
+      start = result.start.start;
+    } while (start !== 0);
+
+    await wclient.execute('sendopen', [name]);
+    await nclient.execute('generatetoaddress', [1, addr]);
+
+    const result = await nclient.get(`/name/${name}`);
+    await nclient.execute('generatetoaddress', [result.info.stats.blocksUntilBidding, addr]);
+    const nameHash = rules.hashName(name);
+
+    const json = await nclient.get(`/name/hash/${nameHash}`);
+
+    assert.deepStrictEqual(json, {
+      name: name
+    });
+  });
+
+  // must create name resource first
+  it('should get name resource', async () => {
+    this.skip();
+  });
+
+  it('should get name proof', async () => {
+    this.skip();
+  });
+
+  it('should grind name', async () => {
+    this.skip();
+    const json = await nclient.get('/name/grind/12');
+    const name = json.name;
+
+    const info = await nclient.get(`/name/${name}`);
+
+    assert.equal(info.start.reserved, false);
+    // this value changes if blocks are mined
+    assert.equal(info.start.week, 0);
+    assert.equal(info.start.start, 0);
+  });
+
   it('should cleanup', async () => {
     await wallet.close();
     await wclient.close();
