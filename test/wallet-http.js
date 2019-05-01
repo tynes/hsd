@@ -36,6 +36,7 @@ const wclient = new WalletClient({
 const wallet = wclient.wallet('primary');
 
 let name, cbAddress;
+const accountTwo = 'foobar';
 
 describe('Wallet HTTP', function() {
   this.timeout(15000);
@@ -46,6 +47,7 @@ describe('Wallet HTTP', function() {
     await wclient.open();
 
     cbAddress = (await wallet.createAddress('default')).address;
+    await wallet.createAccount(accountTwo);
   });
 
   after(async () => {
@@ -65,9 +67,8 @@ describe('Wallet HTTP', function() {
   it('should mine to the primary/default wallet', async () => {
     const height = 20;
 
-    for (let i = 0; i < height; i++) {
+    for (let i = 0; i < height; i++)
       await nclient.execute('generatetoaddress', [1, cbAddress]);
-    }
 
     const info = await nclient.getInfo();
     assert.equal(info.chain.height, height);
@@ -171,6 +172,47 @@ describe('Wallet HTTP', function() {
     assert.equal(mtx.outputs.length, 3 + 1 + 1);
 
     assert.equal(mtx.verify(), true);
+  });
+
+  it('should fail to create open for empty account', async () => {
+    const info = await wallet.getAccount(accountTwo);
+    assert.equal(info.balance.tx, 0);
+    assert.equal(info.balance.coin, 0);
+
+    const fn = async () => (await wclient.post(`/wallet/${wallet.id}/open`, {
+      name: name,
+      account: accountTwo
+    }));
+
+    assert.rejects(fn);
+  });
+
+  it('should mine to the empty account', async () => {
+    const height = 5;
+
+    const {receiveAddress} = await wallet.getAccount(accountTwo);
+
+    for (let i = 0; i < height; i++)
+      await nclient.execute('generatetoaddress', [1, receiveAddress]);
+
+    const info = await wallet.getAccount(accountTwo);
+    assert.ok(info.balance.tx, height);
+    assert.ok(info.balance.coin, height);
+  });
+
+  it('should create open for specific account', async () => {
+    const json = await wclient.post(`/wallet/${wallet.id}/open`, {
+      name: name,
+      account: accountTwo
+    });
+
+    const info = await wallet.getAccount(accountTwo);
+
+    // assert that each of the inputs belongs to the account
+    for (const {address} of json.inputs) {
+      const keyInfo = await wallet.getKey(address);
+      assert.equal(keyInfo.name, info.name);
+    }
   });
 });
 
