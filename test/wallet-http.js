@@ -150,30 +150,6 @@ describe('Wallet HTTP', function() {
     assert.rejects(fn, 'Must sign when broadcasting');
   });
 
-  it('should create an open with multiple outputs', async () => {
-    const json = await wclient.post(`/wallet/${wallet.id}/open`, {
-      name: name,
-      broadcast: false,
-      outputs: [
-        { address: cbAddress, value: 1e4 },
-        { address: cbAddress, value: 1e4 },
-        { address: cbAddress, value: 1e4 }
-      ]
-    });
-
-    const mtx = MTX.fromJSON(json);
-    const opens = mtx.outputs.filter(output => output.covenant.type === types.OPEN);
-    assert.equal(opens.length, 1);
-
-    const sends = mtx.outputs.filter(output => output.address.toString(network) === cbAddress);
-    assert.equal(sends.length, 3);
-
-    // sends + open + change
-    assert.equal(mtx.outputs.length, 3 + 1 + 1);
-
-    assert.equal(mtx.verify(), true);
-  });
-
   it('should fail to create open for empty account', async () => {
     const info = await wallet.getAccount(accountTwo);
     assert.equal(info.balance.tx, 0);
