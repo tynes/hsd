@@ -260,8 +260,222 @@ describe('Wallet HTTP', function() {
       assert.equal(keyInfo.name, info.name);
     }
   });
+
+  it('should open a bid', async () => {
+    await wclient.post(`/wallet/${wallet.id}/open`, {
+      name: name
+    });
+
+    // save chain height for later comparison
+    const info = await nclient.getInfo();
+
+    const {treeInterval} = network.names;
+    for (let i = 0; i < treeInterval + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    const json = await wclient.post(`/wallet/${wallet.id}/bid`, {
+      name: name,
+      bid: 1000,
+      lockup: 2000,
+      debug: true
+    });
+
+    const bids = json.outputs.filter(output => output.covenant.type === types.BID);
+    assert.equal(bids.length, 1);
+
+    const [bid] = bids;
+    assert.equal(bid.covenant.items.length, 4);
+
+    const [nameHash, start, rawName, blind] = bid.covenant.items;
+    // maybe not hashName, one that is for string?
+    assert.equal(nameHash, rules.hashName(name).toString('hex'));
+
+    // initially opened in the first block mined, so chain.height + 1
+    const hex = Buffer.from(start, 'hex').reverse().toString('hex');
+    assert.equal(parseInt(hex, 16), info.chain.height + 1);
+
+    assert.equal(rawName, Buffer.from(name, 'ascii').toString('hex'));
+
+    // blind is type string, so 32 * 2
+    assert.equal(blind.length, 32 * 2);
+  });
+
+  it('should fail to open a bid without a bid value', async () => {
+    const fn = async () => (await wclient.post(`/wallet/${wallet.id}/bid`, {
+      name: name
+    }));
+
+    assert.rejects(fn);
+  });
+
+  it('should fail to open a bid without a lockup value', async () => {
+    const fn = async () => (await wclient.post(`/wallet/${wallet.id}/bid`, {
+      name: name,
+      bid: 1000
+    }));
+
+    assert.rejects(fn);
+  });
+
+  it('should create a reveal', async () => {
+    await wclient.post(`/wallet/${wallet.id}/open`, {
+      name: name
+    });
+
+    const {treeInterval} = network.names;
+    for (let i = 0; i < treeInterval + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    await wclient.post(`/wallet/${wallet.id}/bid`, {
+      name: name,
+      bid: 1000,
+      lockup: 2000
+    });
+
+    const {biddingPeriod} = network.names;
+    for (let i = 0; i < biddingPeriod + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    const {info} = await nclient.execute('getnameinfo', [name]);
+    assert.equal(info.name, name);
+    assert.equal(info.state, 'REVEAL');
+
+    const json = await wclient.post(`/wallet/${wallet.id}/reveal`, {
+      name: name
+    });
+
+    const reveals = json.outputs.filter(output => output.covenant.type === types.REVEAL);
+    assert.equal(reveals.length, 1);
+  });
+
+  it('should create an update', async () => {
+    await wclient.post(`/wallet/${wallet.id}/open`, {
+      name: name
+    });
+
+    const {treeInterval} = network.names;
+    for (let i = 0; i < treeInterval + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    await wclient.post(`/wallet/${wallet.id}/bid`, {
+      name: name,
+      bid: 1000,
+      lockup: 2000
+    });
+
+    const {biddingPeriod} = network.names;
+    for (let i = 0; i < biddingPeriod + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    await wclient.post(`/wallet/${wallet.id}/reveal`, {
+      name: name
+    });
+
+    const {revealPeriod} = network.names;
+    for (let i = 0; i < revealPeriod + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    {
+      const json = await wclient.post(`/wallet/${wallet.id}/update`, {
+        name: name,
+        data: {
+          text: ['foobar']
+        }
+      });
+
+      // register directly after reveal
+      const registers = json.outputs.filter(({covenant}) => covenant.type === types.REGISTER);
+      assert.equal(registers.length, 1);
+    }
+
+    // mine a block
+    await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    {
+      const json = await wclient.post(`/wallet/${wallet.id}/update`, {
+        name: name,
+        data: {
+          text: ['foobar']
+        }
+      });
+
+      // update after register or update
+      const updates = json.outputs.filter(({covenant}) => covenant.type === types.UPDATE);
+      assert.equal(updates.length, 1);
+    }
+  });
+
+  it('should create a renewal', async () => {
+    await wclient.post(`/wallet/${wallet.id}/open`, {
+      name: name
+    });
+
+    const {treeInterval} = network.names;
+    for (let i = 0; i < treeInterval + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    await wclient.post(`/wallet/${wallet.id}/bid`, {
+      name: name,
+      bid: 1000,
+      lockup: 2000
+    });
+
+    const {biddingPeriod} = network.names;
+    for (let i = 0; i < biddingPeriod + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    await wclient.post(`/wallet/${wallet.id}/reveal`, {
+      name: name
+    });
+
+    const {revealPeriod} = network.names;
+    for (let i = 0; i < revealPeriod + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    await wclient.post(`/wallet/${wallet.id}/update`, {
+      name: name,
+      data: {
+        text: ['foobar']
+      }
+    });
+
+    // mine up to the earliest point in which a renewal
+    // can be submitted, a treeInterval into the future
+    for (let i = 0; i < treeInterval + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    const json = await wclient.post(`/wallet/${wallet.id}/renewal`, {
+      name
+    });
+
+    const updates = json.outputs.filter(({covenant}) => covenant.type === types.RENEW);
+    assert.equal(updates.length, 1);
+  });
 });
 
 async function sleep(time) {
   return new Promise(resolve => setTimeout(resolve, time));
 }
+
