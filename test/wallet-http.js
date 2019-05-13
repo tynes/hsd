@@ -8,6 +8,7 @@ const {NodeClient, WalletClient} = require('hs-client');
 const Network = require('../lib/protocol/network');
 const FullNode = require('../lib/node/fullnode');
 const MTX = require('../lib/primitives/mtx');
+const Resource = require('../lib/dns/resource');
 const rules = require('../lib/covenants/rules');
 const {types} = rules;
 
@@ -142,6 +143,12 @@ describe('Wallet HTTP', function() {
       assert.equal(output.value, mtx.outputs[i].value);
       assert.equal(output.address, mtx.outputs[i].address.toString(network));
     }
+  }
+
+  it('should have no name state indexed', async () => {
+    const names = await wclient.get(`/wallet/${wallet.id}/names`);
+
+    assert.equal(names.length, 0);
   });
 
   it('should create an open and broadcast the transaction', async () => {
@@ -289,7 +296,6 @@ describe('Wallet HTTP', function() {
     assert.equal(bid.covenant.items.length, 4);
 
     const [nameHash, start, rawName, blind] = bid.covenant.items;
-    // maybe not hashName, one that is for string?
     assert.equal(nameHash, rules.hashName(name).toString('hex'));
 
     // initially opened in the first block mined, so chain.height + 1
@@ -300,6 +306,17 @@ describe('Wallet HTTP', function() {
 
     // blind is type string, so 32 * 2
     assert.equal(blind.length, 32 * 2);
+  });
+
+  it('should get name info', async () => {
+    const names = await wclient.get(`/wallet/${wallet.id}/names`);
+
+    assert(names.length > 0);
+    const [ns] = names;
+
+    const nameInfo = await wclient.get(`/wallet/${wallet.id}/name`, { name: ns.name });
+
+    assert.deepEqual(ns, nameInfo);
   });
 
   it('should fail to open a bid without a bid value', async () => {
@@ -352,6 +369,20 @@ describe('Wallet HTTP', function() {
 
     const reveals = json.outputs.filter(output => output.covenant.type === types.REVEAL);
     assert.equal(reveals.length, 1);
+  });
+
+  it('should get auction info', async () => {
+    const names = await wclient.get(`/wallet/${wallet.id}/names`);
+
+    assert(names.length > 0);
+    const [,ns] = names;
+
+    const auction = await wclient.get(`/wallet/${wallet.id}/auction`, { name: ns.name });
+
+    // auction info returns a list of bids
+    // and a list of reveals for the name
+    assert.ok(auction.bids);
+    assert.ok(auction.reveals);
   });
 
   it('should create an update', async () => {
@@ -417,6 +448,21 @@ describe('Wallet HTTP', function() {
       const updates = json.outputs.filter(({covenant}) => covenant.type === types.UPDATE);
       assert.equal(updates.length, 1);
     }
+  });
+
+  it('should get name resource', async () => {
+    const names = await wclient.get(`/wallet/${wallet.id}/names`);
+    // filter out to names that have data
+    // this test depends on the previous test
+    const [ns] = names.filter(n => n.data.length > 0);
+    assert(ns);
+
+    const state = Resource.decode(Buffer.from(ns.data, 'hex'));
+
+    const resource = await wclient.get(`/wallet/${wallet.id}/resource`, { name: ns.name });
+    const res = Resource.fromJSON(resource);
+
+    assert.deepEqual(state, res);
   });
 
   it('should create a renewal', async () => {
