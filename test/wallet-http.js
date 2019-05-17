@@ -640,6 +640,76 @@ describe('Wallet HTTP', function() {
     const xfer = json.outputs.filter(({covenant}) => covenant.type === types.TRANSFER);
     assert.equal(xfer.length, 1);
   });
+
+  it('should create a finalize', async () => {
+    await wclient.post(`/wallet/${wallet.id}/open`, {
+      name: name
+    });
+
+    const {treeInterval} = network.names;
+    for (let i = 0; i < treeInterval + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    await wclient.post(`/wallet/${wallet.id}/bid`, {
+      name: name,
+      bid: 1000,
+      lockup: 2000
+    });
+
+    const {biddingPeriod} = network.names;
+    for (let i = 0; i < biddingPeriod + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    await wclient.post(`/wallet/${wallet.id}/reveal`, {
+      name: name
+    });
+
+    const {revealPeriod} = network.names;
+    for (let i = 0; i < revealPeriod + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    await wclient.post(`/wallet/${wallet.id}/update`, {
+      name: name,
+      data: {
+        text: ['foobar']
+      }
+    });
+
+    for (let i = 0; i < treeInterval + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+    await sleep(100);
+
+    const {receiveAddress} = await wallet.getAccount(accountTwo);
+
+    await wclient.post(`/wallet/${wallet.id}/transfer`, {
+      name,
+      address: receiveAddress
+    });
+
+    const {transferLockup} = network.names;
+    for (let i = 0; i < transferLockup + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    const json = await wclient.post(`/wallet/${wallet.id}/finalize`, {
+      name
+    });
+
+    const final = json.outputs.filter(({covenant}) => covenant.type === types.FINALIZE);
+    assert.equal(final.length, 1);
+
+    await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    const ns = await nclient.execute('getnameinfo', [name]);
+    const coin = await nclient.getCoin(ns.info.owner.hash, ns.info.owner.index);
+
+    assert.equal(coin.address, receiveAddress);
+  });
 });
 
 async function sleep(time) {
