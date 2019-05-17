@@ -406,12 +406,6 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    await wclient.post(`/wallet/${wallet.id}/bid`, {
-      name: name,
-      bid: 1000,
-      lockup: 2000
-    });
-
     // wallet2 wins the auction, wallet can submit redeem
     await wclient.post(`/wallet/${wallet.id}/bid`, {
       name: name,
@@ -424,6 +418,8 @@ describe('Wallet HTTP', function() {
       bid: 2000,
       lockup: 3000
     });
+
+    await sleep(100);
 
     const {biddingPeriod} = network.names;
     for (let i = 0; i < biddingPeriod + 1; i++)
@@ -442,6 +438,8 @@ describe('Wallet HTTP', function() {
     const {revealPeriod} = network.names;
     for (let i = 0; i < revealPeriod + 1; i++)
       await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
 
     const json = await wclient.post(`/wallet/${wallet.id}/redeem`, {
       name: name
@@ -628,6 +626,7 @@ describe('Wallet HTTP', function() {
 
     for (let i = 0; i < treeInterval + 1; i++)
       await nclient.execute('generatetoaddress', [1, cbAddress]);
+
     await sleep(100);
 
     const {receiveAddress} = await wallet.getAccount(accountTwo);
@@ -683,6 +682,7 @@ describe('Wallet HTTP', function() {
 
     for (let i = 0; i < treeInterval + 1; i++)
       await nclient.execute('generatetoaddress', [1, cbAddress]);
+
     await sleep(100);
 
     const {receiveAddress} = await wallet.getAccount(accountTwo);
