@@ -35,6 +35,7 @@ const wclient = new WalletClient({
 });
 
 const wallet = wclient.wallet('primary');
+const wallet2 = wclient.wallet('secondary');
 
 let name, cbAddress;
 const accountTwo = 'foobar';
@@ -47,6 +48,7 @@ describe('Wallet HTTP', function() {
     await nclient.open();
     await wclient.open();
 
+    await wclient.createWallet('secondary');
     cbAddress = (await wallet.createAddress('default')).address;
     await wallet.createAccount(accountTwo);
   });
@@ -144,6 +146,14 @@ describe('Wallet HTTP', function() {
       assert.equal(output.address, mtx.outputs[i].address.toString(network));
     }
   }
+
+  it('should mine to the secondary/default wallet', async () => {
+    const {address} = await wallet2.createAddress('default');
+    for (let i = 0; i < 5; i++)
+      await nclient.execute('generatetoaddress', [1, address]);
+
+    assert.ok(true);
+  });
 
   it('should have no name state indexed', async () => {
     const names = await wclient.get(`/wallet/${wallet.id}/names`);
