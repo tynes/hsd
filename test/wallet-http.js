@@ -325,6 +325,62 @@ describe('Wallet HTTP', function() {
     assert.ok(auction.reveals);
   });
 
+  it('should create a redeem', async () => {
+    await wclient.post(`/wallet/${wallet.id}/open`, {
+      name: name
+    });
+
+    const {treeInterval} = network.names;
+    for (let i = 0; i < treeInterval + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    await wclient.post(`/wallet/${wallet.id}/bid`, {
+      name: name,
+      bid: 1000,
+      lockup: 2000
+    });
+
+    // wallet2 wins the auction, wallet can submit redeem
+    await wclient.post(`/wallet/${wallet.id}/bid`, {
+      name: name,
+      bid: 1000,
+      lockup: 2000
+    });
+
+    await wclient.post(`/wallet/${wallet2.id}/bid`, {
+      name: name,
+      bid: 2000,
+      lockup: 3000
+    });
+
+    const {biddingPeriod} = network.names;
+    for (let i = 0; i < biddingPeriod + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    await wclient.post(`/wallet/${wallet.id}/reveal`, {
+      name: name
+    });
+
+    await wclient.post(`/wallet/${wallet2.id}/reveal`, {
+      name: name
+    });
+
+    const {revealPeriod} = network.names;
+    for (let i = 0; i < revealPeriod + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    const json = await wclient.post(`/wallet/${wallet.id}/redeem`, {
+      name: name
+    });
+
+    const redeem = json.outputs.filter(({covenant}) => covenant.type === types.REDEEM);
+    assert.ok(redeem.length > 0);
+  });
+
   it('should create an update', async () => {
     await wclient.post(`/wallet/${wallet.id}/open`, {
       name: name
