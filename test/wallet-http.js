@@ -515,6 +515,61 @@ describe('Wallet HTTP', function() {
     const updates = json.outputs.filter(({covenant}) => covenant.type === types.RENEW);
     assert.equal(updates.length, 1);
   });
+
+  it('should create a transfer', async () => {
+    await wclient.post(`/wallet/${wallet.id}/open`, {
+      name: name
+    });
+
+    const {treeInterval} = network.names;
+    for (let i = 0; i < treeInterval + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    await wclient.post(`/wallet/${wallet.id}/bid`, {
+      name: name,
+      bid: 1000,
+      lockup: 2000
+    });
+
+    const {biddingPeriod} = network.names;
+    for (let i = 0; i < biddingPeriod + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    await wclient.post(`/wallet/${wallet.id}/reveal`, {
+      name: name
+    });
+
+    const {revealPeriod} = network.names;
+    for (let i = 0; i < revealPeriod + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+
+    await sleep(100);
+
+    await wclient.post(`/wallet/${wallet.id}/update`, {
+      name: name,
+      data: {
+        text: ['foobar']
+      }
+    });
+
+    for (let i = 0; i < treeInterval + 1; i++)
+      await nclient.execute('generatetoaddress', [1, cbAddress]);
+    await sleep(100);
+
+    const {receiveAddress} = await wallet.getAccount(accountTwo);
+
+    const json = await wclient.post(`/wallet/${wallet.id}/transfer`, {
+      name,
+      address: receiveAddress
+    });
+
+    const xfer = json.outputs.filter(({covenant}) => covenant.type === types.TRANSFER);
+    assert.equal(xfer.length, 1);
+  });
 });
 
 async function sleep(time) {
