@@ -156,13 +156,13 @@ describe('Wallet HTTP', function() {
   });
 
   it('should have no name state indexed', async () => {
-    const names = await wclient.get(`/wallet/${wallet.id}/names`);
+    const names = await wallet.getNames();
 
     assert.equal(names.length, 0);
   });
 
   it('should create an open and broadcast the transaction', async () => {
-    const json = await wclient.post(`/wallet/${wallet.id}/open`, {
+    const json = await wallet.createOpen({
       name: name
     });
 
@@ -183,7 +183,7 @@ describe('Wallet HTTP', function() {
   });
 
   it('should create an open and not broadcast the transaction', async () => {
-    const json = await wclient.post(`/wallet/${wallet.id}/open`, {
+    const json = await wallet.createOpen({
       name: name,
       broadcast: false
     });
@@ -209,7 +209,7 @@ describe('Wallet HTTP', function() {
   });
 
   it('should create an open and not sign the transaction', async () => {
-    const json = await wclient.post(`/wallet/${wallet.id}/open`, {
+    const json = await wallet.createOpen({
       name: name,
       broadcast: false,
       sign: false
@@ -228,7 +228,7 @@ describe('Wallet HTTP', function() {
   });
 
   it('should throw error with incompatible broadcast and sign options', async () => {
-    const fn = async () => await (wclient.post(`/wallet/${wallet.id}/open`, {
+    const fn = async () => await (wallet.createOpen({
       name: name,
       broadcast: true,
       sign: false
@@ -237,12 +237,12 @@ describe('Wallet HTTP', function() {
     assert.rejects(fn, 'Must sign when broadcasting');
   });
 
-  it('should fail to create open for empty account', async () => {
+  it('should fail to create open for account with no monies', async () => {
     const info = await wallet.getAccount(accountTwo);
     assert.equal(info.balance.tx, 0);
     assert.equal(info.balance.coin, 0);
 
-    const fn = async () => (await wclient.post(`/wallet/${wallet.id}/open`, {
+    const fn = async () => (await wallet.createOpen({
       name: name,
       account: accountTwo
     }));
@@ -250,7 +250,7 @@ describe('Wallet HTTP', function() {
     assert.rejects(fn);
   });
 
-  it('should mine to the empty account', async () => {
+  it('should mine to the account with no monies', async () => {
     const height = 5;
 
     const {receiveAddress} = await wallet.getAccount(accountTwo);
@@ -264,7 +264,7 @@ describe('Wallet HTTP', function() {
   });
 
   it('should create open for specific account', async () => {
-    const json = await wclient.post(`/wallet/${wallet.id}/open`, {
+    const json = await wallet.createOpen({
       name: name,
       account: accountTwo
     });
@@ -279,7 +279,7 @@ describe('Wallet HTTP', function() {
   });
 
   it('should open a bid', async () => {
-    await wclient.post(`/wallet/${wallet.id}/open`, {
+    await wallet.createOpen({
       name: name
     });
 
@@ -292,7 +292,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    const json = await wclient.post(`/wallet/${wallet.id}/bid`, {
+    const json = await wallet.createBid({
       name: name,
       bid: 1000,
       lockup: 2000,
@@ -319,18 +319,18 @@ describe('Wallet HTTP', function() {
   });
 
   it('should get name info', async () => {
-    const names = await wclient.get(`/wallet/${wallet.id}/names`);
+    const names = await wallet.getNames();
 
     assert(names.length > 0);
     const [ns] = names;
 
-    const nameInfo = await wclient.get(`/wallet/${wallet.id}/name`, { name: ns.name });
+    const nameInfo = await wallet.getName(ns.name);
 
     assert.deepEqual(ns, nameInfo);
   });
 
   it('should fail to open a bid without a bid value', async () => {
-    const fn = async () => (await wclient.post(`/wallet/${wallet.id}/bid`, {
+    const fn = async () => (await wallet.createBid({
       name: name
     }));
 
@@ -338,7 +338,7 @@ describe('Wallet HTTP', function() {
   });
 
   it('should fail to open a bid without a lockup value', async () => {
-    const fn = async () => (await wclient.post(`/wallet/${wallet.id}/bid`, {
+    const fn = async () => (await wallet.createBid({
       name: name,
       bid: 1000
     }));
@@ -347,7 +347,7 @@ describe('Wallet HTTP', function() {
   });
 
   it('should create a reveal', async () => {
-    await wclient.post(`/wallet/${wallet.id}/open`, {
+    await wallet.createOpen({
       name: name
     });
 
@@ -357,7 +357,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    await wclient.post(`/wallet/${wallet.id}/bid`, {
+    await wallet.createBid({
       name: name,
       bid: 1000,
       lockup: 2000
@@ -373,7 +373,7 @@ describe('Wallet HTTP', function() {
     assert.equal(info.name, name);
     assert.equal(info.state, 'REVEAL');
 
-    const json = await wclient.post(`/wallet/${wallet.id}/reveal`, {
+    const json = await wallet.createReveal({
       name: name
     });
 
@@ -382,12 +382,14 @@ describe('Wallet HTTP', function() {
   });
 
   it('should get auction info', async () => {
-    const names = await wclient.get(`/wallet/${wallet.id}/names`);
+    const names = await wallet.getNames();
+
+    await sleep(100);
 
     assert(names.length > 0);
     const [,ns] = names;
 
-    const auction = await wclient.get(`/wallet/${wallet.id}/auction`, { name: ns.name });
+    const auction = await wallet.getAuction(ns.name);
 
     // auction info returns a list of bids
     // and a list of reveals for the name
@@ -396,7 +398,7 @@ describe('Wallet HTTP', function() {
   });
 
   it('should create a redeem', async () => {
-    await wclient.post(`/wallet/${wallet.id}/open`, {
+    await wallet.createOpen({
       name: name
     });
 
@@ -407,13 +409,13 @@ describe('Wallet HTTP', function() {
     await sleep(100);
 
     // wallet2 wins the auction, wallet can submit redeem
-    await wclient.post(`/wallet/${wallet.id}/bid`, {
+    await wallet.createBid({
       name: name,
       bid: 1000,
       lockup: 2000
     });
 
-    await wclient.post(`/wallet/${wallet2.id}/bid`, {
+    await wallet2.createBid({
       name: name,
       bid: 2000,
       lockup: 3000
@@ -427,11 +429,11 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    await wclient.post(`/wallet/${wallet.id}/reveal`, {
+    await wallet.createReveal({
       name: name
     });
 
-    await wclient.post(`/wallet/${wallet2.id}/reveal`, {
+    await wallet2.createReveal({
       name: name
     });
 
@@ -441,7 +443,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    const json = await wclient.post(`/wallet/${wallet.id}/redeem`, {
+    const json = await wallet.createRedeem({
       name: name
     });
 
@@ -450,7 +452,7 @@ describe('Wallet HTTP', function() {
   });
 
   it('should create an update', async () => {
-    await wclient.post(`/wallet/${wallet.id}/open`, {
+    await wallet.createOpen({
       name: name
     });
 
@@ -460,7 +462,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    await wclient.post(`/wallet/${wallet.id}/bid`, {
+    await wallet.createBid({
       name: name,
       bid: 1000,
       lockup: 2000
@@ -472,7 +474,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    await wclient.post(`/wallet/${wallet.id}/reveal`, {
+    await wallet.createReveal({
       name: name
     });
 
@@ -483,7 +485,7 @@ describe('Wallet HTTP', function() {
     await sleep(100);
 
     {
-      const json = await wclient.post(`/wallet/${wallet.id}/update`, {
+      const json = await wallet.createUpdate({
         name: name,
         data: {
           text: ['foobar']
@@ -501,7 +503,7 @@ describe('Wallet HTTP', function() {
     await sleep(100);
 
     {
-      const json = await wclient.post(`/wallet/${wallet.id}/update`, {
+      const json = await wallet.createUpdate({
         name: name,
         data: {
           text: ['foobar']
@@ -515,7 +517,7 @@ describe('Wallet HTTP', function() {
   });
 
   it('should get name resource', async () => {
-    const names = await wclient.get(`/wallet/${wallet.id}/names`);
+    const names = await wallet.getNames();
     // filter out to names that have data
     // this test depends on the previous test
     const [ns] = names.filter(n => n.data.length > 0);
@@ -523,14 +525,14 @@ describe('Wallet HTTP', function() {
 
     const state = Resource.decode(Buffer.from(ns.data, 'hex'));
 
-    const resource = await wclient.get(`/wallet/${wallet.id}/resource`, { name: ns.name });
+    const resource = await wallet.getResource(ns.name);
     const res = Resource.fromJSON(resource);
 
     assert.deepEqual(state, res);
   });
 
   it('should create a renewal', async () => {
-    await wclient.post(`/wallet/${wallet.id}/open`, {
+    await wallet.createOpen({
       name: name
     });
 
@@ -540,7 +542,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    await wclient.post(`/wallet/${wallet.id}/bid`, {
+    await wallet.createBid({
       name: name,
       bid: 1000,
       lockup: 2000
@@ -552,7 +554,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    await wclient.post(`/wallet/${wallet.id}/reveal`, {
+    await wallet.createReveal({
       name: name
     });
 
@@ -562,7 +564,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    await wclient.post(`/wallet/${wallet.id}/update`, {
+    await wallet.createUpdate({
       name: name,
       data: {
         text: ['foobar']
@@ -576,7 +578,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    const json = await wclient.post(`/wallet/${wallet.id}/renewal`, {
+    const json = await wallet.createRenewal({
       name
     });
 
@@ -585,7 +587,7 @@ describe('Wallet HTTP', function() {
   });
 
   it('should create a transfer', async () => {
-    await wclient.post(`/wallet/${wallet.id}/open`, {
+    await wallet.createOpen({
       name: name
     });
 
@@ -595,7 +597,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    await wclient.post(`/wallet/${wallet.id}/bid`, {
+    await wallet.createBid({
       name: name,
       bid: 1000,
       lockup: 2000
@@ -607,7 +609,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    await wclient.post(`/wallet/${wallet.id}/reveal`, {
+    await wallet.createReveal({
       name: name
     });
 
@@ -617,7 +619,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    await wclient.post(`/wallet/${wallet.id}/update`, {
+    await wallet.createUpdate({
       name: name,
       data: {
         text: ['foobar']
@@ -631,7 +633,7 @@ describe('Wallet HTTP', function() {
 
     const {receiveAddress} = await wallet.getAccount(accountTwo);
 
-    const json = await wclient.post(`/wallet/${wallet.id}/transfer`, {
+    const json = await wallet.createTransfer({
       name,
       address: receiveAddress
     });
@@ -641,7 +643,7 @@ describe('Wallet HTTP', function() {
   });
 
   it('should create a finalize', async () => {
-    await wclient.post(`/wallet/${wallet.id}/open`, {
+    await wallet.createOpen({
       name: name
     });
 
@@ -651,7 +653,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    await wclient.post(`/wallet/${wallet.id}/bid`, {
+    await wallet.createBid({
       name: name,
       bid: 1000,
       lockup: 2000
@@ -663,7 +665,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    await wclient.post(`/wallet/${wallet.id}/reveal`, {
+    await wallet.createReveal({
       name: name
     });
 
@@ -673,7 +675,7 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
-    await wclient.post(`/wallet/${wallet.id}/update`, {
+    await wallet.createUpdate({
       name: name,
       data: {
         text: ['foobar']
@@ -687,7 +689,7 @@ describe('Wallet HTTP', function() {
 
     const {receiveAddress} = await wallet.getAccount(accountTwo);
 
-    await wclient.post(`/wallet/${wallet.id}/transfer`, {
+    await wallet.createTransfer({
       name,
       address: receiveAddress
     });
@@ -696,7 +698,7 @@ describe('Wallet HTTP', function() {
     for (let i = 0; i < transferLockup + 1; i++)
       await nclient.execute('generatetoaddress', [1, cbAddress]);
 
-    const json = await wclient.post(`/wallet/${wallet.id}/finalize`, {
+    const json = await wallet.createFinalize({
       name
     });
 
