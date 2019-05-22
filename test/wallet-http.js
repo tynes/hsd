@@ -8,10 +8,13 @@ const {NodeClient, WalletClient} = require('hs-client');
 const Network = require('../lib/protocol/network');
 const FullNode = require('../lib/node/fullnode');
 const MTX = require('../lib/primitives/mtx');
+const {isSignatureEncoding, isKeyEncoding} = require('../lib/script/common');
 const Resource = require('../lib/dns/resource');
+const Address = require('../lib/primitives/address');
+const Output = require('../lib/primitives/output');
 const rules = require('../lib/covenants/rules');
 const {types} = rules;
-
+const secp256k1 = require('bcrypto/lib/secp256k1');
 const network = Network.get('regtest');
 const assert = require('bsert');
 
@@ -75,6 +78,10 @@ describe('Wallet HTTP', function() {
 
     const info = await nclient.getInfo();
     assert.equal(info.chain.height, height);
+
+    const accountInfo = await wallet.getAccount('default');
+    // each coinbase output was indexed
+    assert.equal(accountInfo.balance.coin, height);
   });
 
   it('should create a transaction', async () => {
@@ -148,20 +155,67 @@ describe('Wallet HTTP', function() {
   }
 
   it('should mine to the secondary/default wallet', async () => {
+    const height = 5;
+
     const {address} = await wallet2.createAddress('default');
-    for (let i = 0; i < 5; i++)
+    for (let i = 0; i < height; i++)
       await nclient.execute('generatetoaddress', [1, address]);
 
-    assert.ok(true);
+    await sleep(100);
+
+    const accountInfo = await wallet2.getAccount('default');
+    assert.equal(accountInfo.balance.coin, height);
   });
 
   it('should have no name state indexed', async () => {
     const names = await wallet.getNames();
 
-    assert.equal(names.length, 0);
+    assert.strictEqual(names.length, 0);
   });
 
-  it('should create an open and broadcast the transaction', async () => {
+  it('should allow covenants with create tx', async () => {
+    const {address} = await wallet.createChange('default');
+
+    const nameHash = rules.hashName(name);
+    const rawName = Buffer.from(name, 'ascii');
+
+    const output = new Output();
+    output.address = Address.fromString(address);
+    output.value = 0;
+    output.covenant.type = types.OPEN;
+    output.covenant.pushHash(nameHash);
+    output.covenant.pushU32(0);
+    output.covenant.push(rawName);
+
+    const mtx = new MTX();
+    mtx.outputs.push(output);
+
+    const tx = await wallet.createTX(mtx);
+    assert.equal(tx.outputs[0].covenant.type, types.OPEN);
+  });
+
+  it('should allow covenants with send tx', async () => {
+    const {address} = await wallet.createChange('default');
+
+    const nameHash = rules.hashName(name);
+    const rawName = Buffer.from(name, 'ascii');
+
+    const output = new Output();
+    output.address = Address.fromString(address);
+    output.value = 0;
+    output.covenant.type = types.OPEN;
+    output.covenant.pushHash(nameHash);
+    output.covenant.pushU32(0);
+    output.covenant.push(rawName);
+
+    const mtx = new MTX();
+    mtx.outputs.push(output);
+
+    const tx = await wallet.send(mtx);
+    assert.equal(tx.outputs[0].covenant.type, types.OPEN);
+  });
+
+  it('should create an open and broadcast the tx', async () => {
     const json = await wallet.createOpen({
       name: name
     });
@@ -176,9 +230,7 @@ describe('Wallet HTTP', function() {
 
     assert.ok(mempool.includes(json.hash));
 
-    const mtx = MTX.fromJSON(json);
-
-    const opens = mtx.outputs.filter(output => output.covenant.type === types.OPEN);
+    const opens = json.outputs.filter(output => output.covenant.type === types.OPEN);
     assert.equal(opens.length, 1);
   });
 
@@ -199,12 +251,16 @@ describe('Wallet HTTP', function() {
     const mtx = MTX.fromJSON(json);
     assert.ok(mtx.hasWitness());
 
-    const tx = mtx.toTX();
+    const sig = mtx.inputs[0].witness.get(0);
+    assert.ok(isSignatureEncoding(sig));
+    const pubkey = mtx.inputs[0].witness.get(1);
+    assert.ok(isKeyEncoding(pubkey));
+    assert.ok(secp256k1.publicKeyVerify(pubkey));
 
-    // tx is valid
-    assert.ok(tx.verify(mtx.view));
+    // transaction is valid
+    assert.ok(mtx.verify());
 
-    const opens = tx.outputs.filter(output => output.covenant.type === types.OPEN);
+    const opens = mtx.outputs.filter(output => output.covenant.type === types.OPEN);
     assert.equal(opens.length, 1);
   });
 
@@ -223,6 +279,13 @@ describe('Wallet HTTP', function() {
     assert.equal(entered, false);
 
     const mtx = MTX.fromJSON(json);
+    const sig = mtx.inputs[0].witness.get(0);
+    assert.bufferEqual(Buffer.from(''), sig);
+    assert.ok(!isSignatureEncoding(sig));
+
+    const pubkey = mtx.inputs[0].witness.get(1);
+    assert.ok(isKeyEncoding(pubkey));
+    assert.ok(secp256k1.publicKeyVerify(pubkey));
 
     assert.equal(mtx.verify(), false);
   });
@@ -234,7 +297,7 @@ describe('Wallet HTTP', function() {
       sign: false
     }));
 
-    assert.rejects(fn, 'Must sign when broadcasting');
+    assert.rejects(fn, 'Must sign when broadcasting.');
   });
 
   it('should fail to create open for account with no monies', async () => {
@@ -247,7 +310,7 @@ describe('Wallet HTTP', function() {
       account: accountTwo
     }));
 
-    assert.rejects(fn);
+    assert.rejects(fn, 'Not enough funds.');
   });
 
   it('should mine to the account with no monies', async () => {
@@ -258,9 +321,11 @@ describe('Wallet HTTP', function() {
     for (let i = 0; i < height; i++)
       await nclient.execute('generatetoaddress', [1, receiveAddress]);
 
+    await sleep(100);
+
     const info = await wallet.getAccount(accountTwo);
-    assert.ok(info.balance.tx, height);
-    assert.ok(info.balance.coin, height);
+    assert.equal(info.balance.tx, height);
+    assert.equal(info.balance.coin, height);
   });
 
   it('should create open for specific account', async () => {
@@ -295,8 +360,7 @@ describe('Wallet HTTP', function() {
     const json = await wallet.createBid({
       name: name,
       bid: 1000,
-      lockup: 2000,
-      debug: true
+      lockup: 2000
     });
 
     const bids = json.outputs.filter(output => output.covenant.type === types.BID);
@@ -334,7 +398,7 @@ describe('Wallet HTTP', function() {
       name: name
     }));
 
-    assert.rejects(fn);
+    assert.rejects(fn, 'Bid is required.');
   });
 
   it('should fail to open a bid without a lockup value', async () => {
@@ -343,7 +407,7 @@ describe('Wallet HTTP', function() {
       bid: 1000
     }));
 
-    assert.rejects(fn);
+    assert.rejects(fn, 'Lockup is required.');
   });
 
   it('should create a reveal', async () => {
@@ -443,6 +507,13 @@ describe('Wallet HTTP', function() {
 
     await sleep(100);
 
+    // wallet2 is the winner, therefore cannot redeem
+    const fn = async () => (await wallet2.createRedeem({
+      name: name
+    }));
+
+    assert.rejects(fn, 'No reveals to redeem.');
+
     const json = await wallet.createRedeem({
       name: name
     });
@@ -506,7 +577,7 @@ describe('Wallet HTTP', function() {
       const json = await wallet.createUpdate({
         name: name,
         data: {
-          text: ['foobar']
+          text: ['barfoo']
         }
       });
 
@@ -518,7 +589,7 @@ describe('Wallet HTTP', function() {
 
   it('should get name resource', async () => {
     const names = await wallet.getNames();
-    // filter out to names that have data
+    // filter out names that have data
     // this test depends on the previous test
     const [ns] = names.filter(n => n.data.length > 0);
     assert(ns);
@@ -529,6 +600,13 @@ describe('Wallet HTTP', function() {
     const res = Resource.fromJSON(resource);
 
     assert.deepEqual(state, res);
+  });
+
+  it('should fail to get name resource for non existent name', async () => {
+    const name = await nclient.execute('grindname', [10]);
+
+    const resource = await wallet.getResource(name);
+    assert.equal(resource, null);
   });
 
   it('should create a renewal', async () => {
