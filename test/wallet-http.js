@@ -382,6 +382,30 @@ describe('Wallet HTTP', function() {
     assert.equal(blind.length, 32 * 2);
   });
 
+  it('should be able to get nonce', async () => {
+    const bid = 100;
+
+    const response = await wallet.getNonce(name, {
+      address: cbAddress,
+      bid: bid
+    });
+
+    const address = Address.fromString(cbAddress, this.network);
+    const nameHash = rules.hashName(name);
+
+    const primary = node.plugins.walletdb.wdb.primary;
+    const nonce = await primary.generateNonce(nameHash, address, bid);
+    const blind = rules.blind(bid, nonce);
+
+    assert.deepStrictEqual(response, {
+      blind: blind.toString('hex'),
+      nonce: nonce.toString('hex'),
+      bid: bid,
+      name: name,
+      nameHash: nameHash.toString('hex')
+    });
+  });
+
   it('should get name info', async () => {
     const names = await wallet.getNames();
 
