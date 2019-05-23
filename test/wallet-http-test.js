@@ -1031,8 +1031,6 @@ describe('Wallet HTTP', function() {
 
     await mineBlocks(treeInterval + 1, cbAddress);
 
-    const {receiveAddress} = await wallet.getAccount(accountTwo);
-
     const json = await wallet.createRevoke({name});
 
     const final = json.outputs.filter(({covenant}) => covenant.type === types.REVOKE);
