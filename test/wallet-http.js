@@ -50,6 +50,13 @@ const wallet2 = wclient.wallet('secondary');
 let name, cbAddress;
 const accountTwo = 'foobar';
 
+const {
+  treeInterval,
+  biddingPeriod,
+  revealPeriod,
+  transferLockup
+} = network.names;
+
 describe('Wallet HTTP', function() {
   this.timeout(15000);
 
@@ -354,7 +361,6 @@ describe('Wallet HTTP', function() {
     // save chain height for later comparison
     const info = await nclient.getInfo();
 
-    const {treeInterval} = network.names;
     await mineBlocks(treeInterval + 1, cbAddress);
 
     const json = await wallet.createBid({
@@ -439,7 +445,6 @@ describe('Wallet HTTP', function() {
       name: name
     });
 
-    const {treeInterval} = network.names;
     await mineBlocks(treeInterval + 1, cbAddress);
 
     const tx1 = await wallet.createBid({
@@ -497,7 +502,6 @@ describe('Wallet HTTP', function() {
       name: name
     });
 
-    const {treeInterval} = network.names;
     await mineBlocks(treeInterval + 1, cbAddress);
 
     const tx1 = await wallet.createBid({
@@ -546,7 +550,6 @@ describe('Wallet HTTP', function() {
       name: name
     });
 
-    const {treeInterval} = network.names;
     await mineBlocks(treeInterval + 1, cbAddress);
 
     await wallet.createBid({
@@ -555,7 +558,6 @@ describe('Wallet HTTP', function() {
       lockup: 2000
     });
 
-    const {biddingPeriod} = network.names;
     await mineBlocks(biddingPeriod + 1, cbAddress);
 
     const {info} = await nclient.execute('getnameinfo', [name]);
@@ -582,7 +584,6 @@ describe('Wallet HTTP', function() {
       name: name2
     });
 
-    const {treeInterval} = network.names;
     await mineBlocks(treeInterval + 1, cbAddress);
 
     await wallet.createBid({
@@ -597,7 +598,6 @@ describe('Wallet HTTP', function() {
       lockup: 3000
     });
 
-    const {biddingPeriod} = network.names;
     await mineBlocks(biddingPeriod + 1, cbAddress);
 
     await wallet.createReveal({
@@ -608,7 +608,6 @@ describe('Wallet HTTP', function() {
       name: name2
     });
 
-    const {revealPeriod} = network.names;
     await mineBlocks(revealPeriod + 1, cbAddress);
 
     {
@@ -628,7 +627,6 @@ describe('Wallet HTTP', function() {
       name: name
     });
 
-    const {treeInterval} = network.names;
     await mineBlocks(treeInterval + 1, cbAddress);
 
     await wallet.createBid({
@@ -643,7 +641,6 @@ describe('Wallet HTTP', function() {
       lockup: 3000
     });
 
-    const {biddingPeriod} = network.names;
     await mineBlocks(biddingPeriod + 1, cbAddress);
 
     const tx1 = await wallet.createReveal({
@@ -654,7 +651,6 @@ describe('Wallet HTTP', function() {
       name: name
     });
 
-    const {revealPeriod} = network.names;
     await mineBlocks(revealPeriod + 1, cbAddress);
 
     {
@@ -698,7 +694,6 @@ describe('Wallet HTTP', function() {
       name: name
     });
 
-    const {treeInterval} = network.names;
     await mineBlocks(treeInterval + 1, cbAddress);
 
     // wallet2 wins the auction, wallet can submit redeem
@@ -714,9 +709,6 @@ describe('Wallet HTTP', function() {
       lockup: 3000
     });
 
-    await sleep(100);
-
-    const {biddingPeriod} = network.names;
     await mineBlocks(biddingPeriod + 1, cbAddress);
 
     await wallet.createReveal({
@@ -727,7 +719,6 @@ describe('Wallet HTTP', function() {
       name: name
     });
 
-    const {revealPeriod} = network.names;
     await mineBlocks(revealPeriod + 1, cbAddress);
 
     // wallet2 is the winner, therefore cannot redeem
@@ -750,7 +741,6 @@ describe('Wallet HTTP', function() {
       name: name
     });
 
-    const {treeInterval} = network.names;
     await mineBlocks(treeInterval + 1, cbAddress);
 
     await wallet.createBid({
@@ -759,14 +749,12 @@ describe('Wallet HTTP', function() {
       lockup: 2000
     });
 
-    const {biddingPeriod} = network.names;
     await mineBlocks(biddingPeriod + 1, cbAddress);
 
     await wallet.createReveal({
       name: name
     });
 
-    const {revealPeriod} = network.names;
     await mineBlocks(revealPeriod + 1, cbAddress);
 
     {
@@ -826,7 +814,6 @@ describe('Wallet HTTP', function() {
       name: name
     });
 
-    const {treeInterval} = network.names;
     await mineBlocks(treeInterval + 1, cbAddress);
 
     await wallet.createBid({
@@ -835,14 +822,12 @@ describe('Wallet HTTP', function() {
       lockup: 2000
     });
 
-    const {biddingPeriod} = network.names;
     await mineBlocks(biddingPeriod + 1, cbAddress);
 
     await wallet.createReveal({
       name: name
     });
 
-    const {revealPeriod} = network.names;
     await mineBlocks(revealPeriod + 1, cbAddress);
 
     await wallet.createUpdate({
@@ -869,7 +854,6 @@ describe('Wallet HTTP', function() {
       name: name
     });
 
-    const {treeInterval} = network.names;
     await mineBlocks(treeInterval + 1, cbAddress);
 
     await wallet.createBid({
@@ -878,14 +862,12 @@ describe('Wallet HTTP', function() {
       lockup: 2000
     });
 
-    const {biddingPeriod} = network.names;
     await mineBlocks(biddingPeriod + 1, cbAddress);
 
     await wallet.createReveal({
       name: name
     });
 
-    const {revealPeriod} = network.names;
     await mineBlocks(revealPeriod + 1, cbAddress);
 
     await wallet.createUpdate({
@@ -913,7 +895,6 @@ describe('Wallet HTTP', function() {
       name: name
     });
 
-    const {treeInterval} = network.names;
     await mineBlocks(treeInterval + 1, cbAddress);
 
     await wallet.createBid({
@@ -922,14 +903,12 @@ describe('Wallet HTTP', function() {
       lockup: 2000
     });
 
-    const {biddingPeriod} = network.names;
     await mineBlocks(biddingPeriod + 1, cbAddress);
 
     await wallet.createReveal({
       name: name
     });
 
-    const {revealPeriod} = network.names;
     await mineBlocks(revealPeriod + 1, cbAddress);
 
     await wallet.createUpdate({
@@ -948,7 +927,6 @@ describe('Wallet HTTP', function() {
       address: receiveAddress
     });
 
-    const {transferLockup} = network.names;
     await mineBlocks(transferLockup + 1, cbAddress);
 
     const json = await wallet.createFinalize({
