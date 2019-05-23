@@ -570,6 +570,115 @@ describe('Wallet HTTP', function() {
     assert.equal(reveals.length, 1);
   });
 
+  // test fetching
+  it('should get all reveals (single player)', async () => {
+    await wallet.createOpen({
+      name: name
+    });
+
+    const name2 = await nclient.execute('grindname', [5]);
+
+    await wallet.createOpen({
+      name: name2
+    });
+
+    const {treeInterval} = network.names;
+    await mineBlocks(treeInterval + 1, cbAddress);
+
+    await wallet.createBid({
+      name: name,
+      bid: 1000,
+      lockup: 2000
+    });
+
+    await wallet.createBid({
+      name: name2,
+      bid: 2000,
+      lockup: 3000
+    });
+
+    const {biddingPeriod} = network.names;
+    await mineBlocks(biddingPeriod + 1, cbAddress);
+
+    await wallet.createReveal({
+      name: name
+    });
+
+    await wallet.createReveal({
+      name: name2
+    });
+
+    const {revealPeriod} = network.names;
+    await mineBlocks(revealPeriod + 1, cbAddress);
+
+    {
+      const reveals = await wallet.getReveals();
+      assert.equal(reveals.length, 2);
+    }
+
+    {
+      // a single reveal per name
+      const reveals = await wallet.getReveal(name);
+      assert.equal(reveals.length, 1);
+    }
+  });
+
+  it('should get own reveals (two players)', async () => {
+    await wallet.createOpen({
+      name: name
+    });
+
+    const {treeInterval} = network.names;
+    await mineBlocks(treeInterval + 1, cbAddress);
+
+    await wallet.createBid({
+      name: name,
+      bid: 1000,
+      lockup: 2000
+    });
+
+    await wallet2.createBid({
+      name: name,
+      bid: 2000,
+      lockup: 3000
+    });
+
+    const {biddingPeriod} = network.names;
+    await mineBlocks(biddingPeriod + 1, cbAddress);
+
+    const tx1 = await wallet.createReveal({
+      name: name
+    });
+
+    const tx2 = await wallet2.createReveal({
+      name: name
+    });
+
+    const {revealPeriod} = network.names;
+    await mineBlocks(revealPeriod + 1, cbAddress);
+
+    {
+      const reveals = await wallet.getReveal(name, { own: true });
+      assert.equal(reveals.length, 1);
+      const [reveal] = reveals;
+      assert.equal(reveal.own, true);
+      assert.equal(reveal.prevout.hash, tx1.hash);
+    }
+
+    {
+      const reveals = await wallet.getReveal(name);
+      assert.equal(reveals.length, 2);
+
+      assert.ok(reveals.find(reveal =>
+        reveal.prevout.hash === tx1.hash
+      ));
+
+      assert.ok(reveals.find(reveal =>
+        reveal.prevout.hash === tx2.hash
+      ));
+    }
+  });
+
   it('should get auction info', async () => {
     const names = await wallet.getNames();
 
