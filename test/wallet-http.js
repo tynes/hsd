@@ -521,7 +521,7 @@ describe('Wallet HTTP', function() {
 
     {
       // fetch all bids for the name
-      const bids = await wallet.getBid(name);
+      const bids = await wallet.getBidsByName(name);
       assert.equal(bids.length, 2);
 
       // there is no value property on bids
@@ -539,7 +539,7 @@ describe('Wallet HTTP', function() {
 
     {
       // fetch only own bids for the name
-      const bids = await wallet.getBid(name, { own: true });
+      const bids = await wallet.getBidsByName(name, { own: true });
       assert.equal(bids.length, 1);
       const [bid] = bids;
       assert.equal(bid.prevout.hash, tx1.hash);
@@ -618,7 +618,7 @@ describe('Wallet HTTP', function() {
 
     {
       // a single reveal per name
-      const reveals = await wallet.getReveal(name);
+      const reveals = await wallet.getRevealsByName(name);
       assert.equal(reveals.length, 1);
     }
   });
@@ -655,7 +655,7 @@ describe('Wallet HTTP', function() {
     await mineBlocks(revealPeriod + 1, cbAddress);
 
     {
-      const reveals = await wallet.getReveal(name, { own: true });
+      const reveals = await wallet.getRevealsByName(name, { own: true });
       assert.equal(reveals.length, 1);
       const [reveal] = reveals;
       assert.equal(reveal.own, true);
@@ -663,7 +663,7 @@ describe('Wallet HTTP', function() {
     }
 
     {
-      const reveals = await wallet.getReveal(name);
+      const reveals = await wallet.getRevealsByName(name);
       assert.equal(reveals.length, 2);
 
       assert.ok(reveals.find(reveal =>
