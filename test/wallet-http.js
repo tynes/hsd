@@ -758,7 +758,7 @@ async function sleep(time) {
 // take into account race conditions
 async function mineBlocks(count, address) {
   for (let i = 0; i < count; i++) {
-    let obj = { complete: false };
+    const obj = { complete: false };
     node.once('block', () => {
       obj.complete = true;
     });
