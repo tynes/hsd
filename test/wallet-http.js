@@ -346,7 +346,7 @@ describe('Wallet HTTP', function() {
     }
   });
 
-  it('should open a bid', async () => {
+  it('should open an auction', async () => {
     await wallet.createOpen({
       name: name
     });
