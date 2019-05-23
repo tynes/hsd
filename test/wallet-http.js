@@ -95,6 +95,11 @@ describe('Wallet HTTP', function() {
     const accountInfo = await wallet.getAccount('default');
     // each coinbase output was indexed
     assert.equal(accountInfo.balance.coin, height);
+
+    const coins = await wallet.getCoins();
+    // the wallet has no previous history besides
+    // what it has mined
+    assert.ok(coins.every(coin => coin.coinbase === true));
   });
 
   it('should create a transaction', async () => {
@@ -186,16 +191,7 @@ describe('Wallet HTTP', function() {
   it('should allow covenants with create tx', async () => {
     const {address} = await wallet.createChange('default');
 
-    const nameHash = rules.hashName(name);
-    const rawName = Buffer.from(name, 'ascii');
-
-    const output = new Output();
-    output.address = Address.fromString(address);
-    output.value = 0;
-    output.covenant.type = types.OPEN;
-    output.covenant.pushHash(nameHash);
-    output.covenant.pushU32(0);
-    output.covenant.push(rawName);
+    const output = openOutput(name, address);
 
     const mtx = new MTX();
     mtx.outputs.push(output);
@@ -207,16 +203,7 @@ describe('Wallet HTTP', function() {
   it('should allow covenants with send tx', async () => {
     const {address} = await wallet.createChange('default');
 
-    const nameHash = rules.hashName(name);
-    const rawName = Buffer.from(name, 'ascii');
-
-    const output = new Output();
-    output.address = Address.fromString(address);
-    output.value = 0;
-    output.covenant.type = types.OPEN;
-    output.covenant.pushHash(nameHash);
-    output.covenant.pushU32(0);
-    output.covenant.push(rawName);
+    const output = openOutput(name, address);
 
     const mtx = new MTX();
     mtx.outputs.push(output);
@@ -233,6 +220,7 @@ describe('Wallet HTTP', function() {
     let entered = false;
     node.mempool.on('tx', () => entered = true);
 
+    // wait for tx event on mempool
     await common.event(node.mempool, 'tx');
 
     assert.equal(entered, true);
@@ -260,10 +248,13 @@ describe('Wallet HTTP', function() {
 
     // tx is not in the mempool
     assert.equal(entered, false);
+    const mempool = await nclient.getMempool();
+    assert.ok(!mempool.includes(json.hash));
 
     const mtx = MTX.fromJSON(json);
     assert.ok(mtx.hasWitness());
 
+    // the signature and pubkey are templated correctly
     const sig = mtx.inputs[0].witness.get(0);
     assert.ok(isSignatureEncoding(sig));
     const pubkey = mtx.inputs[0].witness.get(1);
@@ -285,21 +276,31 @@ describe('Wallet HTTP', function() {
     });
 
     let entered = false;
-    node.mempool.on('tx', () => entered = true);
+    node.mempool.on('tx', () => {
+      entered = true;
+      assert.ok(false);
+    });
 
-    await sleep(100);
+    await sleep(500);
 
+    // tx is not in the mempool
     assert.equal(entered, false);
+    const mempool = await nclient.getMempool();
+    assert.ok(!mempool.includes(json.hash));
 
+    // the signature is templated as an
+    // empty buffer
     const mtx = MTX.fromJSON(json);
     const sig = mtx.inputs[0].witness.get(0);
     assert.bufferEqual(Buffer.from(''), sig);
     assert.ok(!isSignatureEncoding(sig));
 
+    // the pubkey is properly templated
     const pubkey = mtx.inputs[0].witness.get(1);
     assert.ok(isKeyEncoding(pubkey));
     assert.ok(secp256k1.publicKeyVerify(pubkey));
 
+    // transaction not valid
     assert.equal(mtx.verify(), false);
   });
 
@@ -959,4 +960,20 @@ async function mineBlocks(count, address) {
     await nclient.execute('generatetoaddress', [1, address]);
     await common.forValue(obj, 'complete', true);
   }
+}
+
+// create an OPEN output
+function openOutput(name, address) {
+  const nameHash = rules.hashName(name);
+  const rawName = Buffer.from(name, 'ascii');
+
+  const output = new Output();
+  output.address = Address.fromString(address);
+  output.value = 0;
+  output.covenant.type = types.OPEN;
+  output.covenant.pushHash(nameHash);
+  output.covenant.pushU32(0);
+  output.covenant.push(rawName);
+
+  return output;
 }
