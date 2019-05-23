@@ -23,6 +23,7 @@ const {types} = rules;
 const secp256k1 = require('bcrypto/lib/secp256k1');
 const network = Network.get('regtest');
 const assert = require('bsert');
+const common = require('./util/common');
 
 const node = new FullNode({
   network: 'regtest',
@@ -79,8 +80,7 @@ describe('Wallet HTTP', function() {
   it('should mine to the primary/default wallet', async () => {
     const height = 20;
 
-    for (let i = 0; i < height; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
+    await mineBlocks(height, cbAddress);
 
     const info = await nclient.getInfo();
     assert.equal(info.chain.height, height);
@@ -164,10 +164,7 @@ describe('Wallet HTTP', function() {
     const height = 5;
 
     const {address} = await wallet2.createAddress('default');
-    for (let i = 0; i < height; i++)
-      await nclient.execute('generatetoaddress', [1, address]);
-
-    await sleep(100);
+    await mineBlocks(height, address);
 
     const accountInfo = await wallet2.getAccount('default');
     assert.equal(accountInfo.balance.coin, height);
@@ -229,7 +226,7 @@ describe('Wallet HTTP', function() {
     let entered = false;
     node.mempool.on('tx', () => entered = true);
 
-    await sleep(100);
+    await common.event(node.mempool, 'tx');
 
     assert.equal(entered, true);
     const mempool = await nclient.getMempool();
@@ -247,9 +244,12 @@ describe('Wallet HTTP', function() {
     });
 
     let entered = false;
-    node.mempool.on('tx', () => entered = true);
+    node.mempool.on('tx', () => {
+      entered = true;
+      assert.ok(false);
+    });
 
-    await sleep(100);
+    await sleep(500);
 
     // tx is not in the mempool
     assert.equal(entered, false);
@@ -324,10 +324,7 @@ describe('Wallet HTTP', function() {
 
     const {receiveAddress} = await wallet.getAccount(accountTwo);
 
-    for (let i = 0; i < height; i++)
-      await nclient.execute('generatetoaddress', [1, receiveAddress]);
-
-    await sleep(100);
+    await mineBlocks(height, receiveAddress);
 
     const info = await wallet.getAccount(accountTwo);
     assert.equal(info.balance.tx, height);
@@ -358,10 +355,7 @@ describe('Wallet HTTP', function() {
     const info = await nclient.getInfo();
 
     const {treeInterval} = network.names;
-    for (let i = 0; i < treeInterval + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(treeInterval + 1, cbAddress);
 
     const json = await wallet.createBid({
       name: name,
@@ -446,10 +440,7 @@ describe('Wallet HTTP', function() {
     });
 
     const {treeInterval} = network.names;
-    for (let i = 0; i < treeInterval + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(treeInterval + 1, cbAddress);
 
     await wallet.createBid({
       name: name,
@@ -458,10 +449,7 @@ describe('Wallet HTTP', function() {
     });
 
     const {biddingPeriod} = network.names;
-    for (let i = 0; i < biddingPeriod + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(biddingPeriod + 1, cbAddress);
 
     const {info} = await nclient.execute('getnameinfo', [name]);
     assert.equal(info.name, name);
@@ -477,8 +465,6 @@ describe('Wallet HTTP', function() {
 
   it('should get auction info', async () => {
     const names = await wallet.getNames();
-
-    await sleep(100);
 
     assert(names.length > 0);
     const [,ns] = names;
@@ -497,10 +483,7 @@ describe('Wallet HTTP', function() {
     });
 
     const {treeInterval} = network.names;
-    for (let i = 0; i < treeInterval + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(treeInterval + 1, cbAddress);
 
     // wallet2 wins the auction, wallet can submit redeem
     await wallet.createBid({
@@ -518,10 +501,7 @@ describe('Wallet HTTP', function() {
     await sleep(100);
 
     const {biddingPeriod} = network.names;
-    for (let i = 0; i < biddingPeriod + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(biddingPeriod + 1, cbAddress);
 
     await wallet.createReveal({
       name: name
@@ -532,10 +512,7 @@ describe('Wallet HTTP', function() {
     });
 
     const {revealPeriod} = network.names;
-    for (let i = 0; i < revealPeriod + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(revealPeriod + 1, cbAddress);
 
     // wallet2 is the winner, therefore cannot redeem
     const fn = async () => (await wallet2.createRedeem({
@@ -558,10 +535,7 @@ describe('Wallet HTTP', function() {
     });
 
     const {treeInterval} = network.names;
-    for (let i = 0; i < treeInterval + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(treeInterval + 1, cbAddress);
 
     await wallet.createBid({
       name: name,
@@ -570,20 +544,14 @@ describe('Wallet HTTP', function() {
     });
 
     const {biddingPeriod} = network.names;
-    for (let i = 0; i < biddingPeriod + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(biddingPeriod + 1, cbAddress);
 
     await wallet.createReveal({
       name: name
     });
 
     const {revealPeriod} = network.names;
-    for (let i = 0; i < revealPeriod + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(revealPeriod + 1, cbAddress);
 
     {
       const json = await wallet.createUpdate({
@@ -599,9 +567,7 @@ describe('Wallet HTTP', function() {
     }
 
     // mine a block
-    await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(1, cbAddress);
 
     {
       const json = await wallet.createUpdate({
@@ -645,10 +611,7 @@ describe('Wallet HTTP', function() {
     });
 
     const {treeInterval} = network.names;
-    for (let i = 0; i < treeInterval + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(treeInterval + 1, cbAddress);
 
     await wallet.createBid({
       name: name,
@@ -657,20 +620,14 @@ describe('Wallet HTTP', function() {
     });
 
     const {biddingPeriod} = network.names;
-    for (let i = 0; i < biddingPeriod + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(biddingPeriod + 1, cbAddress);
 
     await wallet.createReveal({
       name: name
     });
 
     const {revealPeriod} = network.names;
-    for (let i = 0; i < revealPeriod + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(revealPeriod + 1, cbAddress);
 
     await wallet.createUpdate({
       name: name,
@@ -681,10 +638,7 @@ describe('Wallet HTTP', function() {
 
     // mine up to the earliest point in which a renewal
     // can be submitted, a treeInterval into the future
-    for (let i = 0; i < treeInterval + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(treeInterval + 1, cbAddress);
 
     const json = await wallet.createRenewal({
       name
@@ -700,10 +654,7 @@ describe('Wallet HTTP', function() {
     });
 
     const {treeInterval} = network.names;
-    for (let i = 0; i < treeInterval + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(treeInterval + 1, cbAddress);
 
     await wallet.createBid({
       name: name,
@@ -712,20 +663,14 @@ describe('Wallet HTTP', function() {
     });
 
     const {biddingPeriod} = network.names;
-    for (let i = 0; i < biddingPeriod + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(biddingPeriod + 1, cbAddress);
 
     await wallet.createReveal({
       name: name
     });
 
     const {revealPeriod} = network.names;
-    for (let i = 0; i < revealPeriod + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(revealPeriod + 1, cbAddress);
 
     await wallet.createUpdate({
       name: name,
@@ -734,10 +679,7 @@ describe('Wallet HTTP', function() {
       }
     });
 
-    for (let i = 0; i < treeInterval + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(treeInterval + 1, cbAddress);
 
     const {receiveAddress} = await wallet.getAccount(accountTwo);
 
@@ -756,10 +698,7 @@ describe('Wallet HTTP', function() {
     });
 
     const {treeInterval} = network.names;
-    for (let i = 0; i < treeInterval + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(treeInterval + 1, cbAddress);
 
     await wallet.createBid({
       name: name,
@@ -768,20 +707,14 @@ describe('Wallet HTTP', function() {
     });
 
     const {biddingPeriod} = network.names;
-    for (let i = 0; i < biddingPeriod + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(biddingPeriod + 1, cbAddress);
 
     await wallet.createReveal({
       name: name
     });
 
     const {revealPeriod} = network.names;
-    for (let i = 0; i < revealPeriod + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(revealPeriod + 1, cbAddress);
 
     await wallet.createUpdate({
       name: name,
@@ -790,10 +723,7 @@ describe('Wallet HTTP', function() {
       }
     });
 
-    for (let i = 0; i < treeInterval + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
-
-    await sleep(100);
+    await mineBlocks(treeInterval + 1, cbAddress);
 
     const {receiveAddress} = await wallet.getAccount(accountTwo);
 
@@ -803,8 +733,7 @@ describe('Wallet HTTP', function() {
     });
 
     const {transferLockup} = network.names;
-    for (let i = 0; i < transferLockup + 1; i++)
-      await nclient.execute('generatetoaddress', [1, cbAddress]);
+    await mineBlocks(transferLockup + 1, cbAddress);
 
     const json = await wallet.createFinalize({
       name
@@ -813,7 +742,7 @@ describe('Wallet HTTP', function() {
     const final = json.outputs.filter(({covenant}) => covenant.type === types.FINALIZE);
     assert.equal(final.length, 1);
 
-    await nclient.execute('generatetoaddress', [1, cbAddress]);
+    await mineBlocks(1, cbAddress);
 
     const ns = await nclient.execute('getnameinfo', [name]);
     const coin = await nclient.getCoin(ns.info.owner.hash, ns.info.owner.index);
@@ -826,3 +755,14 @@ async function sleep(time) {
   return new Promise(resolve => setTimeout(resolve, time));
 }
 
+// take into account race conditions
+async function mineBlocks(count, address) {
+  for (let i = 0; i < count; i++) {
+    let obj = { complete: false };
+    node.once('block', () => {
+      obj.complete = true;
+    });
+    await nclient.execute('generatetoaddress', [1, address]);
+    await common.forValue(obj, 'complete', true);
+  }
+}
