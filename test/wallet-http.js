@@ -944,6 +944,57 @@ describe('Wallet HTTP', function() {
 
     assert.equal(coin.address, receiveAddress);
   });
+
+  it('should create a revoke', async () => {
+    await wallet.createOpen({
+      name: name
+    });
+
+    await mineBlocks(treeInterval + 1, cbAddress);
+
+    await wallet.createBid({
+      name: name,
+      bid: 1000,
+      lockup: 2000
+    });
+
+    await mineBlocks(biddingPeriod + 1, cbAddress);
+
+    await wallet.createReveal({
+      name: name
+    });
+
+    await mineBlocks(revealPeriod + 1, cbAddress);
+
+    await wallet.createUpdate({
+      name: name,
+      data: {
+        text: ['foobar']
+      }
+    });
+
+    await mineBlocks(treeInterval + 1, cbAddress);
+
+    const {receiveAddress} = await wallet.getAccount(accountTwo);
+
+    await wallet.createTransfer({
+      name,
+      address: receiveAddress
+    });
+
+    await mineBlocks(transferLockup + 1, cbAddress);
+
+    const json = await wallet.createRevoke({name});
+
+    const final = json.outputs.filter(({covenant}) => covenant.type === types.REVOKE);
+    assert.equal(final.length, 1);
+
+    await mineBlocks(1, cbAddress);
+
+    const ns = await nclient.execute('getnameinfo', [name]);
+    assert.equal(ns.info.name, name);
+    assert.equal(ns.info.state, 'REVOKED');
+  });
 });
 
 async function sleep(time) {
