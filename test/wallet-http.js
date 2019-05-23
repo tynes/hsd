@@ -434,6 +434,113 @@ describe('Wallet HTTP', function() {
     assert.rejects(fn, 'Lockup is required.');
   });
 
+  it('should get all bids (single player)', async () => {
+    await wallet.createOpen({
+      name: name
+    });
+
+    const {treeInterval} = network.names;
+    await mineBlocks(treeInterval + 1, cbAddress);
+
+    const tx1 = await wallet.createBid({
+      name: name,
+      bid: 1000,
+      lockup: 2000
+    });
+
+    const tx2 = await wallet.createBid({
+      name: name,
+      bid: 2000,
+      lockup: 3000
+    });
+
+    const tx3 = await wallet.createBid({
+      name: name,
+      bid: 4000,
+      lockup: 5000
+    });
+
+    await mineBlocks(1, cbAddress);
+
+    // this method gets all bids for all names
+    const bids = await wallet.getBids();
+
+    // this depends on this it block creating
+    // the first bids of this test suite
+    assert.equal(bids.length, 3);
+    assert.ok(bids.every(bid => bid.name === name));
+
+    // tx1
+    assert.ok(bids.find(bid =>
+      (bid.value === 1000
+        && bid.lockup === 2000
+        && bid.prevout.hash === tx1.hash)
+    ));
+
+    // tx2
+    assert.ok(bids.find(bid =>
+      (bid.value === 2000
+        && bid.lockup === 3000
+        && bid.prevout.hash === tx2.hash)
+    ));
+
+    // tx3
+    assert.ok(bids.find(bid =>
+      (bid.value === 4000
+        && bid.lockup === 5000
+        && bid.prevout.hash === tx3.hash)
+    ));
+  });
+
+  it('should get all bids (two players)', async () => {
+    await wallet.createOpen({
+      name: name
+    });
+
+    const {treeInterval} = network.names;
+    await mineBlocks(treeInterval + 1, cbAddress);
+
+    const tx1 = await wallet.createBid({
+      name: name,
+      bid: 1000,
+      lockup: 2000
+    });
+
+    const tx2 = await wallet2.createBid({
+      name: name,
+      bid: 2000,
+      lockup: 3000
+    });
+
+    await mineBlocks(1, cbAddress);
+
+    {
+      // fetch all bids for the name
+      const bids = await wallet.getBid(name);
+      assert.equal(bids.length, 2);
+
+      // there is no value property on bids
+      // from other wallets
+      assert.ok(bids.find(bid =>
+        (bid.lockup === 2000
+          && bid.prevout.hash === tx1.hash)
+      ));
+
+      assert.ok(bids.find(bid =>
+        (bid.lockup === 3000
+          && bid.prevout.hash === tx2.hash)
+      ));
+    }
+
+    {
+      // fetch only own bids for the name
+      const bids = await wallet.getBid(name, { own: true });
+      assert.equal(bids.length, 1);
+      const [bid] = bids;
+      assert.equal(bid.prevout.hash, tx1.hash);
+    }
+  });
+
   it('should create a reveal', async () => {
     await wallet.createOpen({
       name: name
