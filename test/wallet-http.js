@@ -945,7 +945,7 @@ describe('Wallet HTTP', function() {
     assert.equal(coin.address, receiveAddress);
   });
 
-  it('should create a revoke', async () => {
+  it('should create a cancel', async () => {
     await wallet.createOpen({
       name: name
     });
@@ -983,6 +983,55 @@ describe('Wallet HTTP', function() {
     });
 
     await mineBlocks(transferLockup + 1, cbAddress);
+
+    const json = await wallet.createCancel({name});
+
+    const cancel = json.outputs.filter(({covenant}) => covenant.type === types.UPDATE);
+    assert.equal(cancel.length, 1);
+
+    await mineBlocks(1, cbAddress);
+
+    const ns = await nclient.execute('getnameinfo', [name]);
+    assert.equal(ns.info.name, name);
+
+    const coin = await wallet.getCoin(ns.info.owner.hash, ns.info.owner.index);
+    assert.ok(coin);
+
+    const keyInfo = await wallet.getKey(coin.address);
+    assert.ok(keyInfo);
+  });
+
+  it('should create a revoke', async () => {
+    await wallet.createOpen({
+      name: name
+    });
+
+    await mineBlocks(treeInterval + 1, cbAddress);
+
+    await wallet.createBid({
+      name: name,
+      bid: 1000,
+      lockup: 2000
+    });
+
+    await mineBlocks(biddingPeriod + 1, cbAddress);
+
+    await wallet.createReveal({
+      name: name
+    });
+
+    await mineBlocks(revealPeriod + 1, cbAddress);
+
+    await wallet.createUpdate({
+      name: name,
+      data: {
+        text: ['foobar']
+      }
+    });
+
+    await mineBlocks(treeInterval + 1, cbAddress);
+
+    const {receiveAddress} = await wallet.getAccount(accountTwo);
 
     const json = await wallet.createRevoke({name});
 
