@@ -682,7 +682,7 @@ describe('Wallet HTTP', function() {
     assert(names.length > 0);
     const [,ns] = names;
 
-    const auction = await wallet.getAuction(ns.name);
+    const auction = await wallet.getAuctionByName(ns.name);
 
     // auction info returns a list of bids
     // and a list of reveals for the name
