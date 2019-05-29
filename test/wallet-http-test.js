@@ -397,7 +397,7 @@ describe('Wallet HTTP', function() {
       bid: bid
     });
 
-    const address = Address.fromString(cbAddress, this.network);
+    const address = Address.fromString(cbAddress, network.type);
     const nameHash = rules.hashName(name);
 
     const primary = node.plugins.walletdb.wdb.primary;
@@ -405,6 +405,7 @@ describe('Wallet HTTP', function() {
     const blind = rules.blind(bid, nonce);
 
     assert.deepStrictEqual(response, {
+      address: address.toString(network.type),
       blind: blind.toString('hex'),
       nonce: nonce.toString('hex'),
       bid: bid,
