@@ -1,5 +1,5 @@
 /*!
- * test/wallet-http.js - test for wallet http endoints
+ * test/wallet-http-test.js - test for wallet http endoints
  * Copyright (c) 2019, Mark Tyneway (MIT License).
  * https://github.com/handshake-org/hsd
  */
@@ -170,7 +170,7 @@ describe('Wallet HTTP', function() {
       assert.equal(output.value, mtx.outputs[i].value);
       assert.equal(output.address, mtx.outputs[i].address.toString(network));
     }
-  }
+  });
 
   it('should mine to the secondary/default wallet', async () => {
     const height = 5;
