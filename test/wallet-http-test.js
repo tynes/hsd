@@ -521,6 +521,7 @@ describe('Wallet HTTP', function() {
     await mineBlocks(1, cbAddress);
 
     {
+      await sleep(100);
       // fetch all bids for the name
       const bids = await wallet.getBidsByName(name);
       assert.equal(bids.length, 2);
@@ -574,7 +575,6 @@ describe('Wallet HTTP', function() {
     assert.equal(reveals.length, 1);
   });
 
-  // test fetching
   it('should get all reveals (single player)', async () => {
     await wallet.createOpen({
       name: name
@@ -624,34 +624,50 @@ describe('Wallet HTTP', function() {
     }
   });
 
+  // this test creates namestate to use duing the
+  // next test, hold on to the name being used.
+  const state = {
+    name: '',
+    bids: [],
+    reveals: []
+  };
+
   it('should get own reveals (two players)', async () => {
+    state.name = name;
+
     await wallet.createOpen({
       name: name
     });
 
     await mineBlocks(treeInterval + 1, cbAddress);
 
-    await wallet.createBid({
+    const b1 = await wallet.createBid({
       name: name,
       bid: 1000,
       lockup: 2000
     });
 
-    await wallet2.createBid({
+    const b2 = await wallet2.createBid({
       name: name,
       bid: 2000,
       lockup: 3000
     });
 
+    state.bids.push(b1);
+    state.bids.push(b2);
+
     await mineBlocks(biddingPeriod + 1, cbAddress);
 
-    const tx1 = await wallet.createReveal({
+    const r1 = await wallet.createReveal({
       name: name
     });
 
-    const tx2 = await wallet2.createReveal({
+    const r2 = await wallet2.createReveal({
       name: name
     });
+
+    state.reveals.push(r1);
+    state.reveals.push(r2);
 
     await mineBlocks(revealPeriod + 1, cbAddress);
 
@@ -660,7 +676,7 @@ describe('Wallet HTTP', function() {
       assert.equal(reveals.length, 1);
       const [reveal] = reveals;
       assert.equal(reveal.own, true);
-      assert.equal(reveal.prevout.hash, tx1.hash);
+      assert.equal(reveal.prevout.hash, r1.hash);
     }
 
     {
@@ -668,27 +684,38 @@ describe('Wallet HTTP', function() {
       assert.equal(reveals.length, 2);
 
       assert.ok(reveals.find(reveal =>
-        reveal.prevout.hash === tx1.hash
+        reveal.prevout.hash === r1.hash
       ));
 
       assert.ok(reveals.find(reveal =>
-        reveal.prevout.hash === tx2.hash
+        reveal.prevout.hash === r2.hash
       ));
     }
   });
 
   it('should get auction info', async () => {
-    const names = await wallet.getNames();
-
-    assert(names.length > 0);
-    const [,ns] = names;
+    const ns = await wallet.getName(state.name);
 
     const auction = await wallet.getAuctionByName(ns.name);
 
     // auction info returns a list of bids
     // and a list of reveals for the name
-    assert.ok(auction.bids);
-    assert.ok(auction.reveals);
+    assert.ok(Array.isArray(auction.bids));
+    assert.ok(Array.isArray(auction.reveals));
+
+    // 2 bids and 2 reveals in the previous test
+    assert.equal(auction.bids.length, 2);
+    assert.equal(auction.reveals.length, 2);
+
+    // ordering can be nondeterministic
+    function matchTxId(namestates, target) {
+      assert.ok(namestates.find(ns => ns.prevout.hash === target));
+    }
+
+    matchTxId(auction.bids, state.bids[0].hash);
+    matchTxId(auction.bids, state.bids[1].hash);
+    matchTxId(auction.reveals, state.reveals[0].hash);
+    matchTxId(auction.reveals, state.reveals[1].hash);
   });
 
   it('should create a redeem', async () => {
