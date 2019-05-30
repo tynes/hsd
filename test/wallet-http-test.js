@@ -182,7 +182,7 @@ describe('Wallet HTTP', function() {
     assert.equal(accountInfo.balance.coin, height);
   });
 
-  it('should have no name state indexed', async () => {
+  it('should have no name state indexed initially', async () => {
     const names = await wallet.getNames();
 
     assert.strictEqual(names.length, 0);
