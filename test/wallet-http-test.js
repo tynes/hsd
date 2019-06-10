@@ -11,6 +11,7 @@
 'use strict';
 
 const {NodeClient, WalletClient} = require('hs-client');
+const bsock = require('bsock');
 const Network = require('../lib/protocol/network');
 const FullNode = require('../lib/node/fullnode');
 const MTX = require('../lib/primitives/mtx');
@@ -1069,6 +1070,97 @@ describe('Wallet HTTP', function() {
     const ns = await nclient.execute('getnameinfo', [name]);
     assert.equal(ns.info.name, name);
     assert.equal(ns.info.state, 'REVOKED');
+  });
+
+  it('should emit events for covenants', async () => {
+    const socket = bsock.connect(network.walletPort);
+
+    socket.on('connect', async () => {
+      await socket.call('auth', 'foo');
+      await socket.call('join', wallet.id);
+    });
+
+    const seen = {
+      open: false,
+      bid: false,
+      finalize: false,
+      reveal: false,
+      register: false,
+      update: false,
+      renew: false,
+      transfer: false,
+      revoke: false
+    };
+
+    const typesByVal = [
+      'open', 'bid', 'finalize',
+      'reveal', 'register', 'update',
+      'renew', 'transfer', 'revoke'
+    ];
+
+    for (const t of typesByVal) {
+      const channel = `${t} covenant`;
+      socket.bind(channel, (walletid, data, details) => {
+        assert.equal(walletid, wallet.id);
+        assert.equal(data.name, name);
+        const {covenant} = data.output;
+        assert.equal(covenant.type, types[t.toUpperCase()]);
+        seen[t] = true;
+      });
+    }
+
+    await wallet.createOpen({
+      name: name
+    });
+    await mineBlocks(treeInterval + 1, cbAddress);
+
+    await wallet.createBid({
+      name: name,
+      bid: 1000,
+      lockup: 2000
+    });
+    await mineBlocks(biddingPeriod + 1, cbAddress);
+
+    await wallet.createReveal({
+      name: name
+    });
+    await mineBlocks(revealPeriod + 1, cbAddress);
+
+    // first update is REGISTER
+    await wallet.createUpdate({
+      name: name,
+      data: {text: ['foobar']}
+    });
+    await mineBlocks(treeInterval + 1, cbAddress);
+
+    const {receiveAddress} = await wallet.getAccount('default');
+
+    await wallet.createTransfer({
+      name,
+      address: receiveAddress
+    });
+    await mineBlocks(transferLockup + 1, cbAddress);
+
+    await wallet.createFinalize({name});
+    await mineBlocks(1, cbAddress);
+
+    // second update is UPDATE
+    await wallet.createUpdate({
+      name: name,
+      data: {text: ['foo']}
+    });
+    await mineBlocks(treeInterval + 1, cbAddress);
+
+    await wallet.createRenewal({name});
+    await mineBlocks(1, cbAddress);
+
+    await wallet.createRevoke({name});
+    await mineBlocks(1, cbAddress);
+
+    for (const [value, seen] of Object.entries(typesByVal))
+      assert(seen, `Covenant type ${value} not seen`);
+
+    await socket.destroy();
   });
 });
 
