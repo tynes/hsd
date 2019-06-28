@@ -6,7 +6,6 @@
 
 /* eslint-env mocha */
 /* eslint prefer-arrow-callback: "off" */
-/* eslint no-return-assign: "off" */
 
 'use strict';
 
@@ -20,6 +19,7 @@ const rules = require('../lib/covenants/rules');
 const FullNode = require('../lib/node/fullnode');
 
 const network = Network.get('regtest');
+const {treeInterval} = network.names;
 
 /*
  * create a miner outside of the node
@@ -31,27 +31,6 @@ const network = Network.get('regtest');
  *
  */
 
-/*
-const chain = new Chain({
-  memory: true,
-  network,
-});
-
-
-
-const mempool = new Mempool({
-  memory: true,
-  chain,
-  network
-});
-
-const wdb = new WalletDB({
-  memory: true,
-  network,
-  mempool
-});
-*/
-
 const node = new FullNode({
   memory: true,
   apiKey: 'foo',
@@ -62,47 +41,22 @@ const node = new FullNode({
 const {wdb} = node.require('walletdb');
 const chain = node.chain;
 const mempool = node.mempool;
-//const miner = new Miner({chain});
 const miner = node.miner;
-
-// create full node, pass these objects
-// wdb cannot have nullclient...
-// get the wdb from require on the fullnode
 
 let wallet, keyring;
 
 describe('Miner Test', function() {
   before(async () => {
-    //await chain.open();
-    //await mempool.open();
-    //await miner.open();
     await node.open();
-    //await wdb.open();
-
     wallet = await wdb.create({network});
 
     // set controlled address on miner
     const walletkey = await wallet.createReceive();
     keyring = walletkey.getJSON(network);
     miner.addresses = [keyring.address];
-
-    /*
-    chain.on('connect', async (entry, block) => {
-      await wdb.addBlock(entry, block.txs);
-    });
-
-    chain.on('disconnect', async (entry, block) => {
-      await wdb.removeBlock(entry, block.txs);
-    });
-    */
-
-    wdb.on('send', async (tx) => {
-      await mempool.addTX(tx);
-    });
   });
 
   after(async () => {
-    //await miner.close();
     await node.close();
   });
 
@@ -132,17 +86,44 @@ describe('Miner Test', function() {
     assert.equal(chain.height, height);
   });
 
-  it('should mine a tx that alters the chain', async () => {
+  it('should mine a tx that alters the treeRoot', async () => {
+    const root = node.chain.tip.treeRoot;
     const name = rules.grindName(5, chain.height - 1, network);
-    debugger;
     const mtx = await wallet.sendOpen(name, true);
 
-    const txid = Buffer.from(mtx.txid(), 'hex');
+    await sleep(100);
 
-    const contains = mempool.getTX(txid);
-    console.log(contains);
+    const txid = Buffer.from(mtx.txid(), 'hex');
+    assert(mempool.getTX(txid));
+
+    for (let i = 0; i < treeInterval; i++) {
+      const block = await miner.cpu.mineBlock();
+      assert.ok(await chain.add(block));
+      await sleep(100);
+    }
+
+    assert.ok(!root.equals(node.chain.tip.treeRoot));
+  });
+
+  it('should mine on alternative chain', async () => {
+    this.skip();
+
+    const height = chain.height;
+    // get block entry
+    // const block = await miner.cpu.mineBlock(entry);
+    // assert.ok(await chain.add(block))
+    // assert.equal(height, chain.height);
+    // assert that its not in the main chain
+
+  });
+
+  it('should mine on alt chain (different interval)', async () => {
+    this.skip();
+
   });
 });
+
+// need mineBlocks
 
 function sleep(time) {
   return new Promise(resolve => setTimeout(resolve, time));
