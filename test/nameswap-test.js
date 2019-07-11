@@ -27,6 +27,7 @@ const consensus = require('../lib/protocol/consensus');
 const HDPrivateKey = require('../lib/hd/private');
 const random = require('bcrypto/lib/random');
 const blake2b256 = require('bcrypto/lib/blake2b256');
+const Outpoint = require('../lib/primitives/outpoint');
 
 const common = require('../lib/script/common');
 const SINGLEREVERSE = common.hashType.SINGLEREVERSE;
@@ -167,7 +168,7 @@ describe('Name Swaps', function() {
   let preimage, hashlock;
   it('alice should prepare to participate', async () => {
     preimage = random.randomBytes(32);
-    hashlock = blake2b256.digest(preimage);
+    hashlock = blake2b256.digest(preimage.slice());
 
     const info = await alice.getAccount('default');
     p2pkhAddr = Address.fromString(info.receiveAddress);
@@ -243,6 +244,9 @@ describe('Name Swaps', function() {
       }
     }));
 
+    // change
+    mtx.addOutput(new Output());
+
     const output = new Output({
       address: receiveAddress,
       value: 100 * consensus.COIN,
@@ -250,7 +254,6 @@ describe('Name Swaps', function() {
 
     mtx.addOutput(output);
 
-    const preimage = random.randomBytes(32);
     const aliceKeyInfo = await alice.getKey(p2pkhAddr.toString(network));
     const pubkey = Buffer.from(aliceKeyInfo.publicKey, 'hex');
 
@@ -266,7 +269,6 @@ describe('Name Swaps', function() {
     const prgm = program(p2pkhAddr.hash, hashlock);
     const flag = SINGLEREVERSE | ANYONECANPAY;
 
-    // sig encoding?
     const sig = mtx.signature(0, prgm, coin.value, aliceKeyring.privateKey, flag);
 
     mtx.inputs[0].witness = witness(sig, pubkey, p2pkhAddr.hash, hashlock);
@@ -282,12 +284,14 @@ describe('Name Swaps', function() {
     // create finalize tx
     const finalize = new MTX();
     finalize.addCoin(new Coin());
-    finalize.inputs[0].witness = finalizeWitness(preimage);
+    finalize.inputs[0].witness = finalizeWitness(preimage.slice(), p2pkhAddr.hash, hashlock);
     finalize.addOutput(new Output());
 
     swapTXs.finalize = finalize;
   });
 
+  // hold on to bob's target address
+  let bobFinalizeAddr;
   it('should allow bob to broadcast tx1', async () => {
     // fill in transfer
     const transfer = swapTXs.transfer;
@@ -295,6 +299,7 @@ describe('Name Swaps', function() {
 
     const bobInfo = await bob.getAccount('default');
     const address = Address.fromString(bobInfo.receiveAddress);
+    bobFinalizeAddr = address;
 
     // get the coin that corresponds to the name
     const ns = await nclient.execute('getnameinfo', [name]);
@@ -325,6 +330,14 @@ describe('Name Swaps', function() {
     const coin = Coin.fromJSON(bobCoins[0]);
     const coinjson = coin.toJSON();
 
+    // fee estimation sucks
+    const fee = 9e5;
+    // change, need to subtract the amount in the final output
+    transfer.outputs[1] = new Output({
+      address: bobInfo.changeAddress,
+      value: coin.value - fee - transfer.outputs[transfer.outputs.length - 1].value
+    });
+
     const bobKeyInfo = await bob.getKey(coin.address.toString(network));
 
     const input = Input.fromCoin(coin);
@@ -349,26 +362,166 @@ describe('Name Swaps', function() {
       bobKeyring.publicKey
     ]);
 
-    // absurdly high fee...
-
     const valid = transfer.verify();
     assert(valid);
 
-    const raw = transfer.toRaw().toString('hex');
+    const txn = transfer.toTX();
+    const txid = txn.txid();
 
-    const txid = await nclient.execute('sendrawtransaction', [raw]);
+    await node.sendTX(transfer.toTX());
 
     await sleep(100);
 
     const mempool = await nclient.getMempool()
+    assert(mempool.length > 0);
+    assert(mempool.includes(txid));
 
-    console.log(mempool);
+    await mineBlocks(1, bobInfo.receiveAddress);
 
+    const tip = node.chain.tip.height;
+    const block = await node.chain.getBlock(tip);
 
+    const txids = [];
+    for (const tx of block.txs)
+      txids.push(tx.txid());
 
-    // broadcast
-    // fill in finalize
-    // broadcast
+    // tx is in block
+    assert(txids.includes(txid));
+  });
+
+  it('should mine through the transfer lockup', async () => {
+    const bobInfo = await bob.getAccount('default');
+    await mineBlocks(transferLockup, bobInfo.receiveAddress);
+    // TODO: assert based on namestate
+  });
+
+  it('should allow bob to send the finalize', async () => {
+    const finalize = swapTXs.finalize;
+    assert(finalize);
+
+    const ns = await nclient.execute('getnameinfo', [name]);
+    const owner = ns.info.owner;
+    const namecoin = await nclient.getCoin(owner.hash, owner.index);
+    assert(namecoin);
+    const coin = Coin.fromJSON(namecoin);
+
+    // create input to spend
+    const input = Input.fromCoin(coin);
+    finalize.view.addCoin(coin);
+    input.witness = finalize.inputs[0].witness;
+
+    finalize.inputs[0] = input;
+
+    const info = ns.info;
+
+    // TODO: return bitstring flags in NameState
+
+    const nameHash = Buffer.from(info.nameHash, 'hex');
+    const rawName = Buffer.from(info.name, 'ascii');
+
+    const {wdb} = node.require('walletdb');
+    // funding with the wallet doesn't work?
+    // const wallet = await wdb.get('bob');
+    // need to sign locally -_-
+    // TODO: make wallet api more flexible
+    // for doing interesting types of signing
+
+    const bobInfo = await bob.getAccount('default');
+
+    const renewalBlock = await wdb.getRenewalBlock();
+
+    const covenant = new Covenant();
+    covenant.type = rules.types.FINALIZE;
+    covenant.pushHash(nameHash);
+    covenant.pushU32(info.height);
+    covenant.push(rawName);
+    covenant.pushU8(0);
+    covenant.pushU32(info.claimed);
+    covenant.pushU32(info.renewals);
+    covenant.pushHash(renewalBlock);
+
+    // set the output, the finalize
+    finalize.outputs[0] = new Output({
+      address: bobFinalizeAddr,
+      value: coin.value,
+      covenant: covenant
+    });
+
+    // now add fees
+    const coins = await bob.getCoins();
+    assert(coins.length > 0);
+    const change = Coin.fromJSON(coins[0]);
+    finalize.addCoin(change);
+
+    finalize.addOutput(new Output({
+      // dont actually do fees this way
+      value: change.value * 0.9999,
+      address: bobInfo.receiveAddress
+    }));
+
+    const bobKeyInfo = await bob.getKey(change.address.toString(network));
+
+    // sign input at index 1
+    const bobKey = HDPrivateKey.fromMnemonic(bobMnemonic)
+      .derive(44, true)
+      .derive(network.keyPrefix.coinType, true)
+      .derive(bobInfo.accountIndex, true)
+      .derive(bobKeyInfo.branch)
+      .derive(bobKeyInfo.index);
+
+    const bobKeyring = KeyRing.fromPrivate(bobKey.privateKey);
+
+    const prev = Script.fromPubkeyhash(bobKeyring.getHash());
+    const sig = finalize.signature(1, prev, change.value, bobKeyring.privateKey);
+
+    finalize.inputs[1].witness = new Witness([
+      sig,
+      bobKeyring.publicKey
+    ]);
+
+    const valid = finalize.verify();
+    assert(valid);
+
+    const txn = finalize.toTX();
+    const txid = txn.txid();
+
+    await node.sendTX(txn);
+
+    const mempool = await nclient.getMempool();
+    assert(mempool.length > 0);
+    assert(mempool.includes(txid));
+
+    const preinfo = await nclient.getInfo();
+
+    await mineBlocks(1, bobInfo.receiveAddress);
+
+    const postinfo = await nclient.getInfo();
+    const postmempool = await nclient.getMempool();
+
+    const tip = node.chain.tip.height;
+    const block = await node.chain.getBlock(tip);
+
+    const txids = [];
+    for (const tx of block.txs)
+      txids.push(tx.txid());
+
+    // tx is in block
+    assert(txids.includes(txid));
+  });
+
+  it('should belong to bob', async () => {
+    const ns = await nclient.execute('getnameinfo', [name]);
+    const owner = ns.info.owner;
+    const namecoin = await nclient.getCoin(owner.hash, owner.index);
+    assert(namecoin);
+    const coin = Coin.fromJSON(namecoin);
+
+    const keyInfo = await bob.getKey(coin.address.toString(network.type));
+    assert(keyInfo);
+
+    const fail = await alice.getKey(coin.address.toString(network.type));
+
+    assert.strictEqual(fail, null);
   });
 });
 
@@ -462,11 +615,12 @@ function witness(signature, pubkey, pubkeyhash, hashlock) {
  * Generate the witness for the finalize path
  */
 
-function finalizeWitness(preimage) {
+function finalizeWitness(preimage, pubkeyhash, hashlock) {
   assert(Buffer.isBuffer(preimage));
 
   const witness = new Witness([
-    preimage
+    preimage,
+    program(pubkeyhash, hashlock).encode()
   ]);
 
   witness.compile();
