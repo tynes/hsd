@@ -12,6 +12,7 @@
 const assert = require('bsert');
 const Network = require('../lib/protocol/network');
 const Chain = require('../lib/blockchain/chain');
+const ChainEntry = require('../lib/blockchain/chainentry');
 const Miner = require('../lib/mining/miner');
 const Mempool = require('../lib/mempool/mempool');
 const WalletDB = require('../lib/wallet/walletdb');
@@ -49,8 +50,9 @@ describe('Miner Test', function() {
   before(async () => {
     await node.open();
     wallet = await wdb.create({network});
+  });
 
-    // set controlled address on miner
+  beforeEach(async () => {
     const walletkey = await wallet.createReceive();
     keyring = walletkey.getJSON(network);
     miner.addresses = [keyring.address];
@@ -62,18 +64,6 @@ describe('Miner Test', function() {
 
   it('should start with chain at height 0', () => {
     assert.equal(chain.height, 0);
-  });
-
-  it('should create block the miner stored address', async () => {
-    const block = await miner.cpu.mineBlock();
-
-    const addresses = [];
-    for (const tx of block.txs)
-      for (const output of tx.outputs)
-        addresses.push(output.address.toString(network));
-
-    assert.equal(addresses.length, 1);
-    assert.equal(addresses[0], keyring.address)
   });
 
   it('should add blocks to the chain', async () => {
@@ -105,21 +95,138 @@ describe('Miner Test', function() {
     assert.ok(!root.equals(node.chain.tip.treeRoot));
   });
 
-  it('should mine on alternative chain', async () => {
-    this.skip();
+  it('should mine a fork of a single block', async () => {
+    // mine on a lesser height
+    const height = chain.height - 2;
+    const forkPoint = await chain.getEntry(height);
 
-    const height = chain.height;
-    // get block entry
-    // const block = await miner.cpu.mineBlock(entry);
-    // assert.ok(await chain.add(block))
-    // assert.equal(height, chain.height);
-    // assert that its not in the main chain
+    const block = await miner.cpu.mineBlock(forkPoint);
+    assert.ok(await chain.add(block))
 
+    const entry = ChainEntry.fromBlock(block, forkPoint);
+    assert.ok(!await chain.isMainChain(entry));
   });
 
-  it('should mine on alt chain (different interval)', async () => {
-    this.skip();
+  it('should mine a reorg within the same interval', async () => {
+    // be sure to be at the first block of a new interval
+    // TODO: consider moving this to beforeEach
+    while (chain.height % treeInterval !== 1) {
+      const entry = await chain.getEntry(chain.height);
+      const block = await miner.cpu.mineBlock(entry);
+      assert.ok(await chain.add(block));
+      await sleep(100);
+    }
 
+    // the tip is the first block with the new treeRoot
+    assert(chain.height % treeInterval === 1);
+
+    const forkHeight = chain.height;
+
+    // set up reorg listener
+    let reorged = false;
+    node.chain.once('reorganize', () => {
+      reorged = true;
+    });
+
+    for (let i = 0; i < 2; i++) {
+      const entry = await chain.getEntry(forkHeight + i);
+      const block = await miner.cpu.mineBlock(entry);
+
+      assert.ok(await chain.add(block));
+      await sleep(100);
+    }
+
+    // mine 3 blocks starting at the fork height
+    let prevBlock;
+    for (let i = 0; i < 3; i++) {
+      // use forkHeight the first time
+      const arg = prevBlock ? prevBlock : forkHeight;
+
+      const entry = await chain.getEntry(arg);
+      const block = await miner.cpu.mineBlock(entry);
+
+      prevBlock = block.hash();
+
+      assert.ok(await chain.add(block));
+      await sleep(100);
+    }
+
+    assert.equal(reorged, true);
+  });
+
+  // no different tree state, the treeRoots shouldn't be different
+  it('should mine a reorg between intervals', async () => {
+    let reorged = false;
+    node.chain.once('reorganize', () => {
+      reorged = true;
+    });
+
+    while (chain.height % treeInterval !== 1) {
+      const entry = await chain.getEntry(chain.height);
+      const block = await miner.cpu.mineBlock(entry);
+      assert.ok(await chain.add(block));
+      await sleep(100);
+    }
+
+    assert(chain.height % treeInterval === 1);
+    // start mining blocks from other side of tree interval
+    const forkPoint = chain.height - 3;
+
+    let prevBlock = await chain.getBlock(forkPoint);
+    for (let i = 0; i < 4; i++) {
+      const entry = await chain.getEntry(prevBlock.hash());
+      prevBlock = await miner.cpu.mineBlock(entry);
+      assert.ok(await chain.add(prevBlock));
+      await sleep(100);
+    }
+
+    assert.equal(reorged, true);
+  });
+
+  it('should mine a reorg between intervals with a different treeRoot', async() => {
+    let reorged = false;
+    node.chain.once('reorganize', () => {
+      reorged = true;
+    });
+
+    while (chain.height % treeInterval !== 1) {
+      const entry = await chain.getEntry(chain.height);
+      const block = await miner.cpu.mineBlock(entry);
+      assert.ok(await chain.add(block));
+      await sleep(100);
+    }
+
+    assert(chain.height % treeInterval === 1);
+    // start mining blocks from other side of tree interval
+    const forkPoint = chain.height - 3;
+
+    let prevBlock = await chain.getBlock(forkPoint);
+    for (let i = 0; i < 4; i++) {
+      const entry = await chain.getEntry(prevBlock.hash());
+
+      const name = rules.grindName(5, forkPoint, network);
+      const mtx = await wallet.sendOpen(name, true, {
+        selection: 'age'
+      });
+
+      await sleep(100);
+
+      const txid = Buffer.from(mtx.txid(), 'hex');
+      assert(mempool.getTX(txid));
+
+      prevBlock = await miner.cpu.mineBlock(entry);
+
+      if (i === 3)
+        debugger;
+
+      const res = await chain.add(prevBlock);
+      assert(res);
+
+      //assert.ok(await chain.add(prevBlock));
+      await sleep(100);
+    }
+
+    assert.equal(reorged, true);
   });
 });
 
@@ -127,4 +234,11 @@ describe('Miner Test', function() {
 
 function sleep(time) {
   return new Promise(resolve => setTimeout(resolve, time));
+}
+
+function treeIntervals(height) {
+  const pre = height - (height % treeInterval);
+  const post = height + (treeInterval - (height % treeInterval));
+
+  return [pre, post];
 }
