@@ -47,6 +47,8 @@ const miner = node.miner;
 let wallet, keyring;
 
 describe('Miner Test', function() {
+  this.timeout(10000);
+
   before(async () => {
     await node.open();
     wallet = await wdb.create({network});
@@ -201,10 +203,16 @@ describe('Miner Test', function() {
     const forkPoint = chain.height - 3;
 
     let prevBlock = await chain.getBlock(forkPoint);
+
     for (let i = 0; i < 4; i++) {
       const entry = await chain.getEntry(prevBlock.hash());
 
       const name = rules.grindName(5, forkPoint, network);
+      const nameHash = rules.hashName(name).toString('hex');
+
+      //console.log(name)
+      //console.log(nameHash)
+
       const mtx = await wallet.sendOpen(name, true, {
         selection: 'age'
       });
@@ -214,15 +222,16 @@ describe('Miner Test', function() {
       const txid = Buffer.from(mtx.txid(), 'hex');
       assert(mempool.getTX(txid));
 
-      prevBlock = await miner.cpu.mineBlock(entry);
+      await sleep(500);
 
-      if (i === 3)
-        debugger;
+      prevBlock = await miner.cpu.mineBlock(entry);
 
       const res = await chain.add(prevBlock);
       assert(res);
+      await sleep(500);
 
-      //assert.ok(await chain.add(prevBlock));
+      // this is a hack because the mempool isn't clearing properly
+      await mempool.reset();
       await sleep(100);
     }
 
