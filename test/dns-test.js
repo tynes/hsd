@@ -242,7 +242,11 @@ async function mineBlocks(count, address) {
 }
 
 /**
- * Verify DNSSEC
+ * Verify DNSSEC for each name in the
+ * response. Only check the answer and
+ * authority sections. If all rrsets
+ * are signed, the responses will be
+ * too large and not fit into udp packets
  */
 
 function verifyDNSSEC(resource, pubkey, qtype, name) {
@@ -253,8 +257,8 @@ function verifyDNSSEC(resource, pubkey, qtype, name) {
 
   name = util.fqdn(name);
 
-  const {answer, authority, additional} = resource;
-  const targets = [answer, authority, additional];
+  const {answer, authority} = resource;
+  const targets = [answer, authority];
 
   const records = [];
 
