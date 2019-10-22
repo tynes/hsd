@@ -7,7 +7,6 @@
 'use strict';
 
 const assert = require('bsert');
-const {NodeClient} = require('hs-client');
 const StubResolver = require('bns/lib/resolver/stub');
 const bcrypto = require('bcrypto');
 const dnssec = require('bns/lib/dnssec');
@@ -46,46 +45,20 @@ const nstub = new StubResolver({
   servers: [`127.0.0.1:${network.nsPort}`]
 });
 
-const nclient = new NodeClient({
-  port: network.rpcPort,
-  apiKey: 'foo'
-});
-
 describe('DNS Servers', function() {
   this.timeout(15000);
 
   before(async () => {
     await node.open();
-    await nclient.open();
     await nstub.open();
   });
 
   after(async () => {
-    await nclient.close();
     await node.close();
     await nstub.close();
   });
 
   describe('Authoritative Resolver', () => {
-    it('should return no answer for an ICANN rooted name', async () => {
-      const name = 'com.';
-
-      const res = await nstub.lookup(name, types.A);
-
-      assert.equal(res.question[0].name, name);
-      assert.equal(res.answer.length, 0);
-
-      // Handshake zone is not authoritative for ICANN based name
-      assert.equal(res.aa, false);
-    });
-
-    it('should return no answer for HNS name pre-update', async () => {
-      const name = 'foo.';
-
-      const res = await nstub.lookup(name, types.A);
-      assert.equal(res.answer.length, 0);
-    });
-
     // write each resource json to the tree
     for (const [hstype, item] of Object.entries(json)) {
       // DNS RR type
