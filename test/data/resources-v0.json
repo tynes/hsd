@@ -2,7 +2,10 @@
   "INET4": {
     "type": "A",
     "resource": {
-      "hosts": ["192.168.0.91"],
+      "hosts": [
+        "192.168.0.91",
+        "192.168.1.19"
+      ],
       "ttl": 64
     }
   },
@@ -102,7 +105,7 @@
   "TEXT": {
     "type": "TXT",
     "resource": {
-      "text": ["this is a txt record"],
+      "text": ["this is a txt record", "foobar"],
       "ttl": 64
     }
   },
@@ -193,7 +196,10 @@
   "ADDR": {
     "type": "URI",
     "resource": {
-      "addr": ["bitcoin:bc1qdsr2022f90pum2ptd8ftp4nvpgdhk656ue33qz"],
+      "addr": [
+        "bitcoin:bc1q6yteaqmza4h7en72pwu4hk952c03wr32xxlp7v",
+        "bitcoin:tb1q6yteaqmza4h7en72pwu4hk952c03wr32vqyj9l"
+      ],
       "ttl": 64
     }
   }
