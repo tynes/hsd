@@ -1,5 +1,5 @@
 {
-  "INET4": {
+  "INET4": [{
     "type": "A",
     "resource": {
       "hosts": [
@@ -8,23 +8,23 @@
       ],
       "ttl": 64
     }
-  },
-  "INET6": {
+  }],
+  "INET6": [{
     "type": "AAAA",
     "resource": {
       "hosts": ["fc00::"],
       "ttl": 64
     }
-  },
-  "ONION": {
+  }],
+  "ONION": [{
     "_NOTE": "Returned as TXT record from A/AAAA query",
     "type": "A",
     "resource": {
       "hosts": ["blockchainbdgpzk.onion"],
       "ttl": 64
     }
-  },
-  "ONIONNG": {
+  }],
+  "ONIONNG": [{
     "_NOTE": "Returned as TXT record from A/AAAA query",
     "type": "A",
     "resource": {
@@ -33,29 +33,29 @@
       ],
       "ttl": 64
     }
-  },
-  "NAME": {
+  }],
+  "NAME": [{
     "type": "CNAME",
     "resource": {
       "canonical": "foo.",
       "ttl": 64
     }
-  },
-  "CANONICAL": {
+  }],
+  "CANONICAL": [{
     "type": "CNAME",
     "resource": {
       "canonical": "foo.bar@1.2.3.4",
       "ttl": 64
     }
-  },
-  "DELEGATE": {
+  }],
+  "DELEGATE": [{
     "type": "DNAME",
     "resource": {
       "delegate": "bar.foo@4.3.2.1",
       "ttl": 64
     }
-  },
-  "NS": {
+  }],
+  "NS": [{
     "_NOTE": "Includes glue A records",
     "type": "NS",
     "resource": {
@@ -65,8 +65,8 @@
       ],
       "ttl": 64
     }
-  },
-  "SERVICE": {
+  }],
+  "SERVICE": [{
     "_NOTE": "Includes 2 SRV records, the target is a name or an IP",
     "type": "SRV",
     "resource": {
@@ -87,29 +87,29 @@
       }],
       "ttl": 64
     }
-  },
-  "URI": {
+  }],
+  "URI": [{
     "type": "URI",
     "resource": {
       "uri": ["ftp://ftp1.example.com/public"],
       "ttl": 64
     }
-  },
-  "EMAIL": {
+  }],
+  "EMAIL": [{
     "type": "RP",
     "resource": {
       "email": ["foo.gmail.com"],
       "ttl": 64
     }
-  },
-  "TEXT": {
+  }],
+  "TEXT": [{
     "type": "TXT",
     "resource": {
       "text": ["this is a txt record", "foobar"],
       "ttl": 64
     }
-  },
-  "LOCATION": {
+  }],
+  "LOCATION": [{
     "type": "LOC",
     "resource": {
       "location": [{
@@ -123,8 +123,8 @@
       }],
       "ttl": 64
     }
-  },
-  "MAGNET": {
+  }],
+  "MAGNET": [{
     "type": "URI",
     "resource": {
       "magnet": [
@@ -132,8 +132,8 @@
       ],
       "ttl": 64
     }
-  },
-  "DS": {
+  }],
+  "DS": [{
     "type": "DS",
     "resource": {
       "ds": [{
@@ -144,8 +144,8 @@
       }],
       "ttl": 64
     }
-  },
-  "TLS": {
+  }],
+  "TLS": [{
     "type": "TLSA",
     "resource": {
       "tls": [{
@@ -158,8 +158,8 @@
       }],
       "ttl": 64
     }
-  },
-  "SMIME": {
+  }],
+  "SMIME": [{
     "type": "SMIMEA",
     "resource": {
       "smime": [{
@@ -171,8 +171,8 @@
       }],
       "ttl": 64
     }
-  },
-  "SSH": {
+  }],
+  "SSH": [{
     "type": "SSHFP",
     "resource": {
       "ssh": [{
@@ -182,8 +182,8 @@
       }],
       "ttl": 64
     }
-  },
-  "PGP": {
+  }],
+  "PGP": [{
     "type": "OPENPGPKEY",
     "resource": {
       "pgp": [{
@@ -192,8 +192,8 @@
       }],
       "ttl": 64
     }
-  },
-  "ADDR": {
+  }],
+  "ADDR": [{
     "type": "URI",
     "resource": {
       "addr": [
@@ -202,5 +202,5 @@
       ],
       "ttl": 64
     }
-  }
+  }]
 }
