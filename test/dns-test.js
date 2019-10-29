@@ -60,80 +60,82 @@ describe('DNS Servers', function() {
 
   describe('Authoritative Resolver', () => {
     // write each resource json to the tree
-    for (const [hstype, item] of Object.entries(json)) {
-      // DNS RR type
-      const type = types[item.type];
+    for (const [hstype, list] of Object.entries(json)) {
+      for (const item of list) {
+        // DNS RR type
+        const type = types[item.type];
 
-      // assert that the type maps are correct
-      const rtype = Records.types[hstype];
-      // handshake type -> DNS RR type
-      assert.equal(Records.dnsByType[rtype], type);
-      // handshake type -> handshake value (string)
-      assert.equal(Records.typesByVal[rtype], hstype);
+        // assert that the type maps are correct
+        const rtype = Records.types[hstype];
+        // handshake type -> DNS RR type
+        assert.equal(Records.dnsByType[rtype], type);
+        // handshake type -> handshake value (string)
+        assert.equal(Records.typesByVal[rtype], hstype);
 
-      const resource = Resource.fromJSON(item.resource);
+        const resource = Resource.fromJSON(item.resource);
 
-      let name;
-      before(async () => {
-        // args: size, height, network
-        name = rules.grindName(5, 1, network);
-        const raw = Buffer.from(name, 'ascii');
-        const nameHash = rules.hashName(raw);
-        // create a namestate to save the data to
-        const ns = new NameState();
-        ns.set(raw, 0);
-        ns.setData(resource.encode());
+        let name;
+        before(async () => {
+          // args: size, height, network
+          name = rules.grindName(5, 1, network);
+          const raw = Buffer.from(name, 'ascii');
+          const nameHash = rules.hashName(raw);
+          // create a namestate to save the data to
+          const ns = new NameState();
+          ns.set(raw, 0);
+          ns.setData(resource.encode());
 
-        // Create a database transaction, as
-        // writing directly to the database is
-        // discouraged. Write to the txn and
-        // then commit it.
-        const txn = node.chain.db.tree.transaction();
-        await txn.insert(nameHash, ns.encode());
-        await txn.commit();
-      });
+          // Create a database transaction, as
+          // writing directly to the database is
+          // discouraged. Write to the txn and
+          // then commit it.
+          const txn = node.chain.db.tree.transaction();
+          await txn.insert(nameHash, ns.encode());
+          await txn.commit();
+        });
 
-      it(`should return authenticated ${hstype} record`, async () => {
-        // Certain types of queries require the
-        // name to be formatted with additional data
-        const query = buildQuery(name, resource, type);
+        it(`should return authenticated ${hstype} record`, async () => {
+          // Certain types of queries require the
+          // name to be formatted with additional data
+          const query = buildQuery(name, resource, type);
 
-        // query the authoritative name server
-        let res = await nstub.lookup(query, type);
+          // query the authoritative name server
+          let res = await nstub.lookup(query, type);
 
-        // create the dns response locally
-        let dns = resource.toDNS(query, type);
+          // create the dns response locally
+          let dns = resource.toDNS(query, type);
 
-        // query for the zone signing key
-        const dnskey = await nstub.lookup('.', types.DNSKEY);
+          // query for the zone signing key
+          const dnskey = await nstub.lookup('.', types.DNSKEY);
 
-        // parse the zone signing key and
-        // key signing key out of the response
-        const {zsk, ksk} = getSigningKeys(dnskey);
+          // parse the zone signing key and
+          // key signing key out of the response
+          const {zsk, ksk} = getSigningKeys(dnskey);
 
-        assert(zsk instanceof wire.Record);
-        assert(ksk instanceof wire.Record);
+          assert(zsk instanceof wire.Record);
+          assert(ksk instanceof wire.Record);
 
-        // validate the signature on the ZSK
-        verifyDNSSEC(dnskey, ksk, types.DNSKEY, '.');
-        // validate the signature over the rrsets
-        verifyDNSSEC(res, zsk, type, query);
+          // validate the signature on the ZSK
+          verifyDNSSEC(dnskey, ksk, types.DNSKEY, '.');
+          // validate the signature over the rrsets
+          verifyDNSSEC(res, zsk, type, query);
 
-        // NOTE: the signatures are not canonical
-        // when the native backend is being used
-        // because it uses OpenSSL which does not
-        // yet use RFC 6979, so nullify the
-        // signatures before comparing them
-        if (bcrypto.native === 2) {
-          dns = nullSig(dns);
-          res = nullSig(res);
-          assert(dns && res);
-        }
+          // NOTE: the signatures are not canonical
+          // when the native backend is being used
+          // because it uses OpenSSL which does not
+          // yet use RFC 6979, so nullify the
+          // signatures before comparing them
+          if (bcrypto.native === 2) {
+            dns = nullSig(dns);
+            res = nullSig(res);
+            assert(dns && res);
+          }
 
-        assert.deepEqual(dns.answer, res.answer);
-        assert.deepEqual(dns.authority, res.authority);
-        assert.deepEqual(dns.additional, res.additional);
-      });
+          assert.deepEqual(dns.answer, res.answer);
+          assert.deepEqual(dns.authority, res.authority);
+          assert.deepEqual(dns.additional, res.additional);
+        });
+      }
     }
   });
 });
