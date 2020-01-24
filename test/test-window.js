@@ -11,7 +11,6 @@ async function sleep(time) {
 }
 
 describe('SlidingWindow (Unit)', function() {
-
   const window = new SlidingWindow({
     window: 10,
     limit: 100
