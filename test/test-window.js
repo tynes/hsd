@@ -26,14 +26,14 @@ describe('SlidingWindow (Unit)', function() {
   });
 
   it('should process max requests in window', async () => {
-    for (let i=0; i < window.max-1; i++)
+    for (let i=0; i < window.limit-1; i++)
       window.increase(1);
 
     assert.ok(window.allow());
   });
 
   it('should reject after max requests in window', async () => {
-    for (let i=0; i < window.max; i++)
+    for (let i=0; i < window.limit; i++)
       window.increase(1);
 
     assert.ok(!window.allow());
@@ -42,7 +42,7 @@ describe('SlidingWindow (Unit)', function() {
   it('should reset after window timeout', async () => {
     let reset = false;
 
-    for (let i=0; i < window.max; i++)
+    for (let i=0; i < window.limit; i++)
       window.increase(1);
 
     window.once('reset', () => {
