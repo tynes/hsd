@@ -27,15 +27,16 @@ describe('SlidingWindow (Unit)', function() {
   });
 
   it('should process max requests in window', async () => {
-    for (let i=0; i < window.max; i++)
-      assert.doesNotThrow(() => window.increase(1));
+    for (let i=0; i < window.max-1; i++)
+      window.increase(1);
+
+    assert.ok(window.allow());
   });
 
   it('should reject after max requests in window', async () => {
     for (let i=0; i < window.max; i++)
       window.increase(1);
 
-    window.increase(1);
     assert.ok(!window.allow());
   });
 
