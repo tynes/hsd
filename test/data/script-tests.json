@@ -1981,18 +1981,6 @@
     "result": "OK"
   },
   {
-    "comments": null,
-    "script": "OP_NOP1 OP_CHECKLOCKTIMEVERIFY OP_CHECKSEQUENCEVERIFY OP_NOP4 OP_NOP5 OP_NOP6 OP_NOP7 OP_NOP8 OP_NOP9 OP_NOP10 OP_1 OP_EQUAL",
-    "value": 0,
-    "witness": [
-      "01"
-    ],
-    "locktime": 0,
-    "sequence": 4294967295,
-    "flags": [],
-    "result": "UNSATISFIED_LOCKTIME"
-  },
-  {
     "comments": "Discourage NOPx flag allows OP_NOP",
     "script": "OP_NOP",
     "value": 0,
@@ -6789,18 +6777,6 @@
   },
   {
     "comments": null,
-    "script": "OP_NOP1 OP_CHECKLOCKTIMEVERIFY OP_CHECKSEQUENCEVERIFY OP_NOP4 OP_NOP5 OP_NOP6 OP_NOP7 OP_NOP8 OP_NOP9 OP_NOP10 OP_2 OP_EQUAL",
-    "value": 0,
-    "witness": [
-      "01"
-    ],
-    "locktime": 0,
-    "sequence": 4294967295,
-    "flags": [],
-    "result": "UNSATISFIED_LOCKTIME"
-  },
-  {
-    "comments": null,
     "script": "OP_NOP1",
     "value": 0,
     "witness": [
@@ -6840,20 +6816,6 @@
       "DISCOURAGE_UPGRADABLE_NOPS"
     ],
     "result": "UNSATISFIED_LOCKTIME"
-  },
-  {
-    "comments": null,
-    "script": "OP_NOP4",
-    "value": 0,
-    "witness": [
-      "01"
-    ],
-    "locktime": 0,
-    "sequence": 4294967295,
-    "flags": [
-      "DISCOURAGE_UPGRADABLE_NOPS"
-    ],
-    "result": "DISCOURAGE_UPGRADABLE_NOPS"
   },
   {
     "comments": null,
